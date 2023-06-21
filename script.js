@@ -3,7 +3,7 @@ const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const CANVAS_WIDTH = canvas.width = 1000
 const CANVAS_HEIGHT = canvas.height = 750;
-const FRAME_RATE = 41.666;//20.83333 = 48fps;
+const FRAME_RATE = 33.333;//20.83333 = 48fps;
 let lastTimeStamp = 0;
 let frameTime = 1;
 let frameTimeDeficit = 0;
@@ -202,7 +202,7 @@ function updatePlayerAnimation(){
         player.newInputDelayFrames -= 1;
     }
     if (player.input !== player.lastInput){
-        player.newInputDelayFrames = 3;
+        player.newInputDelayFrames = 4;
     }
     player.lastInput = player.input;
        
@@ -263,7 +263,8 @@ function animate(timestamp){
 
         updatePlayerAnimation(player)
         drawFromFrame(player.sprite, player.currentFrame);
-        
+        ctx.font = '40px roboto'
+        ctx.fillText("A - D to move sword", 10, 50)
         timerGame ++;
         document.getElementById("game_timer").innerHTML = timerGame;
     }
