@@ -1,0 +1,134 @@
+﻿{"frames": {
+
+"sword0":
+{
+	"frame": {"x":0,"y":0,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword1":
+{
+	"frame": {"x":764,"y":0,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword2":
+{
+	"frame": {"x":1528,"y":0,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword3":
+{
+	"frame": {"x":2292,"y":0,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword4":
+{
+	"frame": {"x":3056,"y":0,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword5":
+{
+	"frame": {"x":0,"y":628,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword6":
+{
+	"frame": {"x":764,"y":628,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"skippable": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword7":
+{
+	"frame": {"x":1528,"y":628,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"skippable": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword8":
+{
+	"frame": {"x":2292,"y":628,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"skippable": true,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword9":
+{
+	"frame": {"x":3056,"y":628,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword10":
+{
+	"frame": {"x":0,"y":1256,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword11":
+{
+	"frame": {"x":764,"y":1256,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword12":
+{
+	"frame": {"x":1528,"y":1256,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword13":
+{
+	"frame": {"x":2292,"y":1256,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+},
+"sword14":
+{
+	"frame": {"x":3056,"y":1256,"w":764,"h":628},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
+	"sourceSize": {"w":764,"h":628}
+}},
+"meta": {
+	"app": "Adobe Animate",
+	"version": "23.0.1.70",
+	"image": "sword_updated.png",
+	"format": "RGBA8888",
+	"size": {"w":4096,"h":2048},
+	"scale": "1"
+}
+}
