@@ -3,7 +3,7 @@ const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const CANVAS_WIDTH = canvas.width = 1000
 const CANVAS_HEIGHT = canvas.height = 750;
-const FRAME_RATE = 33.333;//20.83333 = 48fps;
+const FRAME_RATE = 20.8333;//20.83333 = 48fps;
 let lastTimeStamp = 0;
 let frameTime = 1;
 let frameTimeDeficit = 0;
@@ -14,274 +14,224 @@ let loaded = false;
 const keyRecord = {
     a:{pressed:false},
     d:{pressed:false}}; 
+const sfx = { clink: new Audio()};
 
 
 window.addEventListener('keydown', (e) =>{
     keyRecord[e.key] = { pressed:true, key: e.key } 
-    
-
 })
 window.addEventListener('keyup', (e) => {
     keyRecord[e.key].pressed = false;
 })
 
-const swordSprite = JSON.parse(JSON.stringify({"frames": {
+window.addEventListener('click', () => {
+    sfx.clink.src = `./clink-sfx/${Math.floor(Math.random()*6)}.wav`
+    sfx.clink.play();
+} )
 
-    "0":
-    {
-        "frame": {"x":0,"y":0,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "1":
-    {
-        "frame": {"x":764,"y":0,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "2":
-    {
-        "frame": {"x":1528,"y":0,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "3":
-    {
-        "frame": {"x":2292,"y":0,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "4":
-    {
-        "frame": {"x":3056,"y":0,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "5":
-    {
-        "frame": {"x":0,"y":628,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "6":
-    {
-        "frame": {"x":764,"y":628,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "skippable": true,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628},
-        "skippable":true
-    },
-    "7":
-    {
-        "frame": {"x":1528,"y":628,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "skippable": true,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628},
-        "skippable":true
-    },
-    "8":
-    {
-        "frame": {"x":2292,"y":628,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "skippable": true,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628},
-        "skippable":true
-    },
-    "9":
-    {
-        "frame": {"x":3056,"y":628,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "10":
-    {
-        "frame": {"x":0,"y":1256,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "11":
-    {
-        "frame": {"x":764,"y":1256,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "12":
-    {
-        "frame": {"x":1528,"y":1256,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "13":
-    {
-        "frame": {"x":2292,"y":1256,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    },
-    "14":
-    {
-        "frame": {"x":3056,"y":1256,"w":764,"h":628},
-        "rotated": false,
-        "trimmed": false,
-        "spriteSourceSize": {"x":0,"y":0,"w":764,"h":628},
-        "sourceSize": {"w":764,"h":628}
-    }},
-    "meta": {
-        "app": "Adobe Animate",
-        "version": "23.0.1.70",
-        "image": "sword_updated.png",
-        "format": "RGBA8888",
-        "size": {"w":4096,"h":2048},
-        "scale": "1"
+document.getElementById("volume").addEventListener('change', changeVolume)
+
+function changeVolume(event){
+    for (const [key,value] of Object.entries(sfx)) {
+        sfx[key].volume = event.target.value/100;
     }
-    }));
-
-
-swordSprite.image = new Image();
-swordSprite.image.src = swordSprite.meta.image;
-swordSprite.offSetWidth = 0+CANVAS_WIDTH*0.1;
-swordSprite.offSetHeight = 0+CANVAS_HEIGHT*0.15;
-
-
-const player = {
-    sprite: swordSprite,
-    currentFrame: 7,
-    destination: { left: 0, right:14, neutral:7},
-    skipFrames: false,
-    framesToSkip: [5,6,7,8,9],
-    frameIncrement: 1,
-    lastInput: 'none',
-    input: 'none',
-    newInputDelayFrames: 0
-}
-
-function drawFromFrame(sprite,frameNumber){
-    const frame = sprite.frames[frameNumber];
-    ctx.drawImage(sprite.image, frame.frame.x, frame.frame.y, 
-        frame.frame.w, frame.frame.h,
-        sprite.offSetWidth, sprite.offSetHeight,
-        frame.sourceSize.w, frame.sourceSize.h);
+    console.log(event.target.value)   
 }
 
 
 
-
-function updatePlayerAnimation(){
-    
-    player.input = parsePlayerInput(player.lastInput);
-
-    if (player.newInputDelayFrames > 0){
-        player.input = player.lastInput
-        player.newInputDelayFrames -= 1;
+class Player {
+    constructor() {
+        this.blockSprite,
+        this.attackSprite,
+        this.currentFrame = 18;
+        this.targetFrame = { a: 0, d: 34, neutral: 18 };
+        this.framesToSkip = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+        this.frameIncrement = 1;
+        this.lastInput = 'neutral';
+        this.input = 'neutral';
+        this.inputDelayCounter = 0;
+        this.frameCounter = 0;
+        this.bounceModifier = 0;
+        this.swayModifier = 0;
+        this.blocking = {left: false, right: false}
+        this.attacking = {left: false, neutral: false, right: false}
     }
-    if (player.input !== player.lastInput){
-        player.newInputDelayFrames = 4;
-    }
-    player.lastInput = player.input;
-       
-
-    switch (player.input){
-        case 'd': {
-            destination = 14;
-            break;
+    readInput(){
+        
+        let inputCandidate = 'neutral';
+        if (keyRecord.d.pressed) inputCandidate = 'd'
+        if (keyRecord.a.pressed) inputCandidate = 'a'
+        this.input = this.lastInput === 'neutral' || !keyRecord[this.lastInput].pressed ? 
+            inputCandidate : this.lastInput;
+        if (this.inputDelayCounter > 0){
+            this.input = this.lastInput
+            this.inputDelayCounter -= 1;
         }
-        case 'a': {
-            destination = 0;
-            break
+        if (this.input !== this.lastInput){
+            this.inputDelayCounter = 4;
         }
-        default: { destination = player.destination.neutral };
+        this.lastInput = this.input;
     }
-    let frameDifference = destination-player.currentFrame
-    player.frameIncrement = Math.sign(frameDifference)
-    player.skipFrames = 
-        player.framesToSkip.includes(destination) || player.framesToSkip.includes(player.currentFrame)
-        ? false
-        : true
+    update(){
+        this.readInput();
+        this.updateBounceModifier();
+        this.updateBlockAnimation();
+        this.updateAttackAnimation();
+    }
+    updateBounceModifier() {
+        this.bounceModifier = Math.sin(this.frameCounter / 10) * 15;
+        this.swayModifier = Math.cos(this.frameCounter / 20) * 10;
+        if (this.bounceModifier > 0)
+            this.bounceModifier *= -1;
+        if (this.swayModifier > 0)
+            this.swayModifier *= -1;
+    }
+    updateAttackAnimation() {
+        const isAttacking = Object.values(this.attacking).includes(true);
+        console.log(isAttacking) 
+        
+    }
+    updateBlockAnimation(){
+        let target = this.targetFrame[player.input]
+        let frameDifference = target-this.currentFrame
+        if (frameDifference === 0) return;
+        let skipFrame = (!this.framesToSkip.includes(target) && !this.framesToSkip.includes(this.currentFrame))
 
-    if ((player.currentFrame !== 15 && player.currentFrame !== -1) && frameDifference !== 0){
-    
-        player.currentFrame += player.frameIncrement;
-        while (player.skipFrames){
-            if (player.framesToSkip.includes(player.currentFrame)) player.currentFrame += player.frameIncrement;
-            else break;
+        this.frameIncrement = Math.sign(frameDifference)
+        this.currentFrame += (this.frameIncrement);
+
+        if (skipFrame && (Math.abs(frameDifference) > 20 )) sfx.swipe.play();
+        if (skipFrame && this.framesToSkip.includes(this.currentFrame)){
+            this.currentFrame = 18 + this.frameIncrement*(Math.ceil(this.framesToSkip.length/2))
         }
     }
     
-    console.log(player.currentFrame)
+    draw(){
+        
+        const blockSprite = this.blockSprite
+        const frame = blockSprite.frames[this.currentFrame].frame;
+        ctx.drawImage(
+            blockSprite.image, 
+            frame.x, frame.y, 
+            frame.w, frame.h,
+            blockSprite.offSetWidth + this.swayModifier , blockSprite.offSetHeight + this.bounceModifier,
+            frame.w, frame.h);
+    }
+}
+let player = new Player();
+
+
+(async () => {
+      const res = await Promise.all([
+        fetch("./sword48.json"),
+        fetch("./sword-attack-1.json"),
+        //fetch("./crossbow-attack.json")
+      ]);
+      const data = await Promise.all(res.map(r => r.json()))
+      console.log(data.flat());
+      data.forEach((json) => {
+        json.image = new Image();
+        json.image.src = `./${json.meta.image}`;
+        json.offSetWidth = 0+CANVAS_WIDTH*0.1;
+        json.offSetHeight = 0+CANVAS_HEIGHT*0.15;
+        player[json.meta.name] = json;
+      })
+      loadSound();
+      animate(0);
+})();
+
+function loadSound(){
+    sfx.music = new Audio();
+    sfx.music.src = './Loop_The_Bards_Tale.wav'
+    sfx.music.playbackRate = 1;
+    sfx.music.volume = 0;
+    sfx.music.loop = true;
+    sfx.music.play();
+    sfx.swipe = new Audio();
+    sfx.swipe.volume = 0;
+    sfx.swipe.src = './swish-9.wav'
+    sfx.swipe.playbackRate = 1;
 
 }
 
-function parsePlayerInput(lastInput){
-    let inputCandidate = 'none';
+
+function readInput(){
+    let lastInput = player.lastInput;
+    let inputCandidate = 'neutral';
     if (keyRecord.d.pressed) inputCandidate = 'd'
     if (keyRecord.a.pressed) inputCandidate = 'a'
-    let input = lastInput === 'none' || !keyRecord[lastInput].pressed ? 
+    let input = lastInput === 'neutral' || !keyRecord[lastInput].pressed ? 
             inputCandidate : lastInput;
-    return input;
+    console.log(input)
+    player.input = input;
+    if (player.inputDelayCounter > 0){
+        player.input = player.lastInput
+        player.inputDelayCounter -= 1;
+    }
+    if (player.input !== player.lastInput){
+        player.inputDelayCounter = 4;
+    }
+    player.lastInput = player.input;
+    
 }
 
-function animate(timestamp){
+function updatePlayerAnimation(player){
 
-    //calculate game frames due per real canvas frame ()
+    player.updateBounceModifier();
+    const newDirection = readPlayerMovement(player.lastInput);
+    updatePlayerMovement(player.targetFrame[newDirection]);
+    player.updateAttackAnimation();
+
+}
+
+function updatePlayerMovement(target){
+    let frameDifference = target-player.currentFrame
+    if (frameDifference === 0) return;
+    let skipFrame = (!player.framesToSkip.includes(target) && !player.framesToSkip.includes(player.currentFrame))
+    
+    player.frameIncrement = Math.sign(frameDifference)
+    player.currentFrame += (player.frameIncrement);
+
+    if (skipFrame && (Math.abs(frameDifference) > 20 )) sfx.swipe.play();
+    if (skipFrame && player.framesToSkip.includes(player.currentFrame)){
+        player.currentFrame = 18 + player.frameIncrement*(Math.ceil(player.framesToSkip.length/2))
+    }
+
+}
+
+
+
+
+function getFramesDue(timestamp){
     frameTime = timestamp - lastTimeStamp;
     lastTimeStamp = timestamp;
     frameTimeDeficit += frameTime;
     const framesDue = Math.floor(frameTimeDeficit/FRAME_RATE);
     frameTimeDeficit = frameTimeDeficit % FRAME_RATE;
-    
-    for (let i = 0; i < framesDue; i++){
-        //update game state here
-        ctx.clearRect(0,0,CANVAS_WIDTH, CANVAS_HEIGHT);
-        
-
-        updatePlayerAnimation(player)
-        drawFromFrame(player.sprite, player.currentFrame);
-        ctx.font = '40px roboto'
-        ctx.fillText("A - D to move sword", 10, 50)
-        timerGame ++;
-        document.getElementById("game_timer").innerHTML = timerGame;
+    return framesDue;
     }
-    
-    timerNative++;
-    
-    if (frameTime > worstFrameTime && loaded) worstFrameTime = Math.floor(frameTime*1000)/1000;
 
-    document.getElementById("game_label").innerHTML = `game frames (${FRAME_RATE}ms, ${Math.floor(1000/FRAME_RATE)}fps): `
-    document.getElementById("native_label").innerHTML = 
-        `real frames (${Math.floor(frameTime*1000)/1000}ms,
-         ${Math.floor(1000/frameTime)}fps)
-         average: ${Math.floor((timerNative/timerGame)*1000/FRAME_RATE)}fps:`;
-    document.getElementById("native_timer").innerHTML = Math.floor(timerNative);
-    
-    
+function animate(timestamp){
+    let framesDue = getFramesDue(timestamp);
+    for (let i = 0; i < framesDue; i++){
+        ctx.clearRect(0,0,CANVAS_WIDTH, CANVAS_HEIGHT);
+        player.update();
+        player.draw();
+        player.frameCounter++
+        timerGame ++;
+    }
+    timerNative++;
+    displayFrameInfo();
     requestAnimationFrame(animate);  
 }
 
-animate(0);
+function displayFrameInfo(){
+    document.getElementById("game_timer").innerHTML = timerGame;
+    document.getElementById("game_label").innerHTML = `game frames (${FRAME_RATE}ms, ${Math.floor(1000/FRAME_RATE)}fps): `
+    document.getElementById("native_label").innerHTML = 
+    `real frames (${Math.floor(frameTime*1000)/1000}ms,
+    ${Math.floor(1000/frameTime)}fps)
+    average: ${Math.floor((timerNative/timerGame)*1000/FRAME_RATE)}fps:`;
+    document.getElementById("native_timer").innerHTML = Math.floor(timerNative);  
+}  
