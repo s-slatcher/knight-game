@@ -7,9 +7,10 @@ let FRAME_RATE = 20.8333;//20.83333 = 48fps;
 let lastTimeStamp = 0;
 let frameTime = 1;
 let frameTimeDeficit = 0;
-
+let projectiles = [];
 let timerGame = 0;
 let timerNative = 0;
+
 
 const keyRecord = {
     a:{pressed:false},
@@ -18,16 +19,20 @@ const keyRecord = {
 const sfx = { clink: new Audio()};
 
 
+
 window.addEventListener('keydown', (e) =>{
     keyRecord[e.key] = { pressed:true, key: e.key } 
+    e.preventDefault();
 })
 window.addEventListener('keyup', (e) => {
     keyRecord[e.key].pressed = false;
 })
 
-window.addEventListener('click', () => {
-    sfx.clink.src = `./clink-sfx/${Math.floor(Math.random()*6)}.wav`
-    sfx.clink.play();
+window.addEventListener('click', (e) => {
+    // sfx.clink.src = `./clink-sfx/${Math.floor(Math.random()*6)}.wav`
+    // sfx.clink.play();
+    projectiles.push(new Projectile(e.clientX,e.clientY))
+
 } )
 
 document.getElementById("volume").addEventListener('change', changeVolume)
@@ -40,6 +45,31 @@ function changeVolume(event){
     console.log(event.target.value)   
 }
 
+class Projectile {
+    constructor(x,y){
+        this.width = 30;
+        this.height = 30;
+        this.positionX = x - this.width/2
+        this.positionY = y - this.height/2
+        this.totalVelocity = 20;
+        this.velocityX = Math.random()*5*Math.sign((Math.random()-0.5));
+        this.velocityY = Math.sqrt(Math.pow(this.totalVelocity,2) - Math.pow(this.velocityX,2))
+        this.gravity = 1;
+        this.lifeTime = 0;
+        this.alpha = 1;
+        this.rotation = (Math.random()*360 * Math.PI / 180)
+    }
+    update(){
+        if (this.positionY > CANVAS_HEIGHT+100) return;
+        this.positionX += this.velocityX;
+        this.positionY -= this.velocityY;
+        this.velocityY -= this.gravity;
+        this.lifeTime += 1;
+        this.alpha = this.alpha > 0 ? 1-(this.lifeTime/50) : 0;
+        this.rotation += this.velocityX/50
+    
+    }
+}
 
 
 class Player {
@@ -56,12 +86,13 @@ class Player {
         this.inputDelayCounter = 0;
         this.frameCounter = 0;
         this.block = {left: false, right: false}
-        this.isAttacking = false;
+        this.tryAttacking = false;
         this.attack = {left: false, neutral: false, right: false}
     }
     readMovementInput(){
         let inputCandidate = 'neutral';
-        if (keyRecord[" "].pressed) this.isAttacking = true;
+        this.tryAttacking = false;
+        if (keyRecord[" "].pressed) this.tryAttacking = true;
         if (keyRecord.d.pressed) inputCandidate = 'd'
         if (keyRecord.a.pressed) inputCandidate = 'a'
         this.input = this.lastInput === 'neutral' || !keyRecord[this.lastInput].pressed ? 
@@ -74,6 +105,7 @@ class Player {
             this.inputDelayCounter = 4;
         }
         this.lastInput = this.input;
+        console.log(this.tryAttacking)
     }
     update(){
         this.readMovementInput();
@@ -201,11 +233,27 @@ function animate(timestamp){
         player.draw();
         player.frameCounter++
         timerGame ++;
+        
+        
+        projectiles.forEach((e) => {
+            e.update();
+
+            ctx.save();
+            ctx.translate(e.positionX,e.positionY)
+            ctx.rotate(e.rotation);
+            ctx.translate(-e.positionX,-e.positionY)
+            ctx.fillStyle= "#0e87cc"
+            ctx.globalAlpha = e.alpha;
+            ctx.fillRect(e.positionX, e.positionY,40,40);
+            ctx.restore();
+        })
     }
     timerNative++;
     displayFrameInfo();
     requestAnimationFrame(animate);  
 }
+
+
 
 function displayFrameInfo(){
     document.getElementById("game_timer").innerHTML = timerGame;
