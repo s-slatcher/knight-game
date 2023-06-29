@@ -3,17 +3,18 @@ const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const CANVAS_WIDTH = canvas.width = 1000
 const CANVAS_HEIGHT = canvas.height = 750;
-const FRAME_RATE = 20.8333;//20.83333 = 48fps;
+let FRAME_RATE = 20.8333;//20.83333 = 48fps;
 let lastTimeStamp = 0;
 let frameTime = 1;
 let frameTimeDeficit = 0;
-let worstFrameTime = 0;
+
 let timerGame = 0;
 let timerNative = 0;
-let loaded = false;
+
 const keyRecord = {
     a:{pressed:false},
-    d:{pressed:false}}; 
+    d:{pressed:false},
+    ' ':{pressed:false}}; 
 const sfx = { clink: new Audio()};
 
 
@@ -30,6 +31,7 @@ window.addEventListener('click', () => {
 } )
 
 document.getElementById("volume").addEventListener('change', changeVolume)
+document.getElementById("fps").addEventListener('change', (e) => (FRAME_RATE = 1000/e.target.value))
 
 function changeVolume(event){
     for (const [key,value] of Object.entries(sfx)) {
@@ -44,7 +46,8 @@ class Player {
     constructor() {
         this.blockSprite,
         this.attackSprite,
-        this.currentFrame = 18;
+        this.moveFrame = 18;
+        this.attackFrame = 0;
         this.targetFrame = { a: 0, d: 34, neutral: 18 };
         this.framesToSkip = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
         this.frameIncrement = 1;
@@ -52,14 +55,13 @@ class Player {
         this.input = 'neutral';
         this.inputDelayCounter = 0;
         this.frameCounter = 0;
-        this.bounceModifier = 0;
-        this.swayModifier = 0;
-        this.blocking = {left: false, right: false}
-        this.attacking = {left: false, neutral: false, right: false}
+        this.block = {left: false, right: false}
+        this.isAttacking = false;
+        this.attack = {left: false, neutral: false, right: false}
     }
-    readInput(){
-        
+    readMovementInput(){
         let inputCandidate = 'neutral';
+        if (keyRecord[" "].pressed) this.isAttacking = true;
         if (keyRecord.d.pressed) inputCandidate = 'd'
         if (keyRecord.a.pressed) inputCandidate = 'a'
         this.input = this.lastInput === 'neutral' || !keyRecord[this.lastInput].pressed ? 
@@ -74,7 +76,7 @@ class Player {
         this.lastInput = this.input;
     }
     update(){
-        this.readInput();
+        this.readMovementInput();
         this.updateBounceModifier();
         this.updateBlockAnimation();
         this.updateAttackAnimation();
@@ -88,34 +90,38 @@ class Player {
             this.swayModifier *= -1;
     }
     updateAttackAnimation() {
-        const isAttacking = Object.values(this.attacking).includes(true);
-        console.log(isAttacking) 
         
     }
     updateBlockAnimation(){
         let target = this.targetFrame[player.input]
-        let frameDifference = target-this.currentFrame
+        let frameDifference = target-this.moveFrame
         if (frameDifference === 0) return;
-        let skipFrame = (!this.framesToSkip.includes(target) && !this.framesToSkip.includes(this.currentFrame))
+        let skipFrame = (!this.framesToSkip.includes(target) && !this.framesToSkip.includes(this.moveFrame))
 
         this.frameIncrement = Math.sign(frameDifference)
-        this.currentFrame += (this.frameIncrement);
+        this.moveFrame += (this.frameIncrement);
 
         if (skipFrame && (Math.abs(frameDifference) > 20 )) sfx.swipe.play();
-        if (skipFrame && this.framesToSkip.includes(this.currentFrame)){
-            this.currentFrame = 18 + this.frameIncrement*(Math.ceil(this.framesToSkip.length/2))
+        if (skipFrame && this.framesToSkip.includes(this.moveFrame)){
+            this.moveFrame = 18 + this.frameIncrement*(Math.ceil(this.framesToSkip.length/2))
         }
+
+
     }
     
     draw(){
-        
+        this.drawMovement();
+    }
+
+    drawMovement(){
         const blockSprite = this.blockSprite
-        const frame = blockSprite.frames[this.currentFrame].frame;
+        const frame = blockSprite.frames[this.moveFrame].frame;
         ctx.drawImage(
             blockSprite.image, 
             frame.x, frame.y, 
             frame.w, frame.h,
-            blockSprite.offSetWidth + this.swayModifier , blockSprite.offSetHeight + this.bounceModifier,
+            blockSprite.offSetWidth + blockSprite.movementWidth + this.swayModifier, 
+            blockSprite.offSetHeight + blockSprite.movementHeight + this.bounceModifier,
             frame.w, frame.h);
     }
 }
@@ -135,6 +141,8 @@ let player = new Player();
         json.image.src = `./${json.meta.image}`;
         json.offSetWidth = 0+CANVAS_WIDTH*0.1;
         json.offSetHeight = 0+CANVAS_HEIGHT*0.15;
+        json.movementWidth = 0;
+        json.movementHeight = 0;
         player[json.meta.name] = json;
       })
       loadSound();
@@ -175,33 +183,6 @@ function readInput(){
     player.lastInput = player.input;
     
 }
-
-function updatePlayerAnimation(player){
-
-    player.updateBounceModifier();
-    const newDirection = readPlayerMovement(player.lastInput);
-    updatePlayerMovement(player.targetFrame[newDirection]);
-    player.updateAttackAnimation();
-
-}
-
-function updatePlayerMovement(target){
-    let frameDifference = target-player.currentFrame
-    if (frameDifference === 0) return;
-    let skipFrame = (!player.framesToSkip.includes(target) && !player.framesToSkip.includes(player.currentFrame))
-    
-    player.frameIncrement = Math.sign(frameDifference)
-    player.currentFrame += (player.frameIncrement);
-
-    if (skipFrame && (Math.abs(frameDifference) > 20 )) sfx.swipe.play();
-    if (skipFrame && player.framesToSkip.includes(player.currentFrame)){
-        player.currentFrame = 18 + player.frameIncrement*(Math.ceil(player.framesToSkip.length/2))
-    }
-
-}
-
-
-
 
 function getFramesDue(timestamp){
     frameTime = timestamp - lastTimeStamp;
