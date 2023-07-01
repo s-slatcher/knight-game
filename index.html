@@ -13,7 +13,11 @@
     <input type="range" name="volume" id="volume" value="0" min="0" max="50">
     <label for="fps">Frame Rate</label>
     <input type="range" name="fps" id="fps" value="48" min="10" max="144" step="4.5">
-    <canvas id="canvas1"></canvas>
+    <div id="canvas-container">
+        <canvas id="canvas2"></canvas>
+        <canvas id="canvas1"></canvas>
+    </div>
+    
     <p id="game_label"></p><span id="game_timer"></span>
     <p id="native_label"></p><span id="native_timer"></span>
    
