@@ -1,4 +1,6 @@
-/**  @type {HTMLCanvasElement} */
+window.addEventListener('load', function(){
+    this.alert("loaded")
+    /**  @type {HTMLCanvasElement} */
 const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const canvas2 = document.getElementById("canvas2")
@@ -143,13 +145,13 @@ class Player {
             ctx2.scale(-1,1);
             ctx2.translate(-500,0);
         }
-        ctx2.drawImage(
+        if (this.attackFrame > 0) { ctx.drawImage(
             attackSprite.image,
             frame.x, frame.y,
             frame.w, frame.h,
             attackSprite.offSetWidth + 200,
             attackSprite.offSetHeight + 200,
-            frame.w, frame.h);
+            frame.w, frame.h); }
         if (this.attackFrame === attackSprite.frames.length - 1) {
             this.isAttacking = false;
             this.attackFrame = 0;
@@ -295,3 +297,5 @@ function displayFrameInfo() {
     average: ${Math.floor((timerNative / timerGame) * 1000 / FRAME_RATE)}fps:`;
     document.getElementById("native_timer").innerHTML = Math.floor(timerNative);
 }  
+
+})
