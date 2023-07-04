@@ -29,6 +29,7 @@ class Game{
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.player = new Player(this);
+        document.getElementById("")
     }
     update(timestamp, keyRecord){
         let framesDue = this.getFramesDue(timestamp)
@@ -58,25 +59,27 @@ class Player{
     constructor(game){
         this.game = game;
         this.spritesLoaded = false;
-        this.lastWASDInput = 'none'
+        this.wasdInput = 'none'
         this.attackInput;
+        this.state = {block:false, attack:false}
         this.#fetchSprites()
             .then(() => {
                 this.block = new Block(this.game, this.blockSprite)
                 this.attack = new Attack(this.game, this.attackSprite)
             })
+        
     }
     
-    readInput(keyRecord){
-        let newWASDInput = this.lastWASDInput;
-        if (keyRecord.length === 0) newWASDInput = 'none'
-        else if (!keyRecord.includes(this.lastWASDInput)){
-            if (keyRecord.includes('a')) newWASDInput = 'a'
-            if (keyRecord.includes('d')) newWASDInput = 'd'
+    updateInput(keyRecord){
+        let newWasdInput;
+        if (keyRecord.length === 0) newWasdInput = 'none'
+        else if (!keyRecord.includes(this.newWasdInput)){
+            if (keyRecord.includes('a')) newWasdInput = 'a'
+            if (keyRecord.includes('d')) newWasdInput = 'd'
         }
-        this.lastWASDInput = newWASDInput;
+        this.wasdInput = newWasdInput;
 
-        if(keyRecord.includes(" ")) this.attackInput = this.lastWASDInput
+        if(keyRecord.includes(" ")) this.attackInput = this.wasdInput
         else this.attackInput = 'none'
         
         
@@ -94,14 +97,7 @@ class Player{
         //     inputCandidate : this.lastInput;
 
 
-        // if (this.inputDelayCounter > 0) {
-        //     this.input = this.lastInput
-        //     this.inputDelayCounter -= 1;
-        // }
-        // if (this.input !== this.lastInput) {
-        //     this.inputDelayCounter = 4;
-        // }
-        // this.lastInput = this.input;
+        
 
         // if (keyRecord[' '].pressed && this.inputDelayCounter === 0) {
         //     Object.values(this.blockDirection).forEach((e) => e = false)
@@ -111,16 +107,22 @@ class Player{
     }
     update(keyRecord){
         if(!this.spritesLoaded) return;
-        this.block.update();
-        let input = this.readInput(keyRecord);
-
+        this.updateInput(keyRecord)
+        this.block.update(this.wasdInput);
+        this.setState();
     }
     draw(){
         if (!this.spritesLoaded) return;
         this.block.draw();
     }
+    setState(){
+        this.state.block = false;
+        if (this.block.frame > 30) this.state.block = 'right' 
+        if (this.block.frame < 6) this.state.block = 'left' 
+        console.log(this.state.block)
         
-        //update different player states based on 
+        
+    }
     
     fadeOut(){}
     async #fetchSprites(){
@@ -143,28 +145,73 @@ class Block{
     constructor(game, sprite){
         this.game = game
         this.ctx = game.ctx
+        this.input = 'none'
         this.offSetWidth = 0 + game.width * 0.1;
         this.offSetHeight = 0 + game.height * 0.15;
         this.sprite = sprite;
         this.framesArr = sprite.frames
         this.frame = 18;
         this.frameIncrement = 1;
+        this.frameQueue = [18];
+        this.positionInQueue = 0;
+        this.frameDestinations = {'none':18, 'a':0, 'd':35} 
+        this.middleFramesToSkip = 10 
+        this.earlyFramesToSkip = 5
+        this.inputDelayCounter = 0;
+        
+        
     }
-    update(){
-        this.frame += this.frameIncrement;
-        if (this.frame === this.framesArr.length || this.frame < 0) {
-            this.frameIncrement *= -1;
-            this.frame += this.frameIncrement
+    makeNewFrameQueue(newInput='none'){
+        let frameEnd = this.frameDestinations[newInput];
+        
+        this.frameQueue = [];
+       
+        let increment = Math.sign(frameEnd-this.frame)
+        let skipMiddleFrames = false;
+
+        if (Object.values(this.frameDestinations).includes(this.frame)) {
+            
+            this.frame += this.earlyFramesToSkip * increment
         }
+        if(Math.abs(this.frame - frameEnd)> 18) {
+            skipMiddleFrames = true;
+            
+        }
+        
+        for (let i = this.frame + increment; i !== frameEnd + increment; i += increment){
+            if (skipMiddleFrames && (i>11 && i<27)) continue;
+            this.frameQueue.push(i)
+        }
+        this.positionInQueue = 0;
+        
+        
+    }
+    update(input){
+        if (this.inputDelayCounter > 0) {
+            input = this.input
+            this.inputDelayCounter -= 1;
+        }
+        if (input !== this.input) {
+            this.inputDelayCounter = 4;
+            this.makeNewFrameQueue(input)
+            
+        }
+        this.input = input;
+        
+        if (this.positionInQueue !== this.frameQueue.length) this.frame = this.frameQueue[this.positionInQueue++]
+        return;
+        
+
     }
     draw(){
+        
         let frame = this.framesArr[this.frame].frame
+        
         ctx.drawImage(this.sprite.image, frame.x, frame.y,
             frame.w, frame.h,
             this.offSetWidth,
             this.offSetHeight,
             frame.w, frame.h)
-        
     }
 }
 
