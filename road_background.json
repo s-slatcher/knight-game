@@ -1,0 +1,163 @@
+﻿{"frames": [
+
+{
+	"filename": "perspective-squiggle-road0000",
+	"frame": {"x":0,"y":0,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0001",
+	"frame": {"x":881,"y":0,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0002",
+	"frame": {"x":1762,"y":0,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0003",
+	"frame": {"x":2643,"y":0,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0004",
+	"frame": {"x":0,"y":653,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0005",
+	"frame": {"x":881,"y":653,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0006",
+	"frame": {"x":1762,"y":653,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0007",
+	"frame": {"x":2643,"y":653,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0008",
+	"frame": {"x":0,"y":1306,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0009",
+	"frame": {"x":881,"y":1306,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0010",
+	"frame": {"x":1762,"y":1306,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0011",
+	"frame": {"x":2643,"y":1306,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0012",
+	"frame": {"x":0,"y":1959,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0013",
+	"frame": {"x":881,"y":1959,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0014",
+	"frame": {"x":1762,"y":1959,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0015",
+	"frame": {"x":2643,"y":1959,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0016",
+	"frame": {"x":0,"y":2612,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0017",
+	"frame": {"x":881,"y":2612,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}
+,{
+	"filename": "perspective-squiggle-road0018",
+	"frame": {"x":1762,"y":2612,"w":881,"h":653},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":881,"h":653},
+	"sourceSize": {"w":881,"h":653}
+}],
+"meta": {
+	"app": "Adobe Animate",
+	"version": "23.0.1.70",
+	"image": "road_background.png",
+	"format": "RGB8",
+	"size": {"w":4096,"h":4096},
+	"scale": "1"
+}
+}

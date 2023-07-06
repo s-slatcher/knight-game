@@ -1,3 +1,5 @@
+
+
 window.addEventListener('load', function(){
     this.alert("loaded")
     /**  @type {HTMLCanvasElement} */

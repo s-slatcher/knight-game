@@ -11,6 +11,8 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
 
+document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
+
 const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const CANVAS_WIDTH = canvas.width = 1000;
@@ -18,7 +20,7 @@ const CANVAS_HEIGHT = canvas.height = 750;
 
 
 class Game{
-    constructor(ctx, width, height){
+    constructor(ctx, width, height, playerSprites, backgroundSprites){
         this.ctx = ctx;
         this.width = width;
         this.height = height;
@@ -28,22 +30,27 @@ class Game{
         this.testX = 0;
         this.totalFrames = 0;
         this.speedModifier = 1;
-        this.player = new Player(this);
-        document.getElementById("")
+        this.backgroundSprites = backgroundSprites
+        this.player = new Player(this, playerSprites)
+        this.background = new Background(this, backgroundSprites)
+        this.fpsSlider = document.getElementById("fps")
     }
     update(timestamp, keyRecord){
+        this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
         for (let i = 0; i < framesDue; i++) {
             this.testX += 5;
             this.totalFrames++;
             this.player.update(keyRecord)
+            this.background.update()
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            this.draw();
         }
     }
     draw(){
-        
         this.ctx.fillRect(this.testX,this.height/2,50,50);
+        this.background.draw(this.ctx);
         this.player.draw();
-        
     }
     getFramesDue(timestamp){
         let frameTime = timestamp - this.lastTimeStamp;
@@ -55,182 +62,262 @@ class Game{
     }
 }
 
-class Player{
-    constructor(game){
+class Background{
+    constructor(game, sprites){
         this.game = game;
-        this.spritesLoaded = false;
-        this.wasdInput = 'none'
-        this.attackInput;
-        this.state = {block:false, attack:false}
-        this.#fetchSprites()
-            .then(() => {
-                this.block = new Block(this.game, this.blockSprite)
-                this.attack = new Attack(this.game, this.attackSprite)
-            })
-        
+        this.road = sprites.road
+            this.road.offSetWidth = this.game.width/2 - this.road.frameData.w/2
+            this.road.offSetHeight = this.game.height - this.road.frameData.h * 0.75
+        this.rock = {}
+        this.rock.image = new Image()
+        this.rock.image.src = "./rock.png"
+        this.rock.initHeight = 180
+        this.rock.initWidth = 90
+        this.rock.initSpeed = 1.3;
+        this.rock.scaler = 1;
+        this.rock.heightTraveled = 0;
+        this.rock.speed = this.rock.initSpeed;
     }
-    
-    updateInput(keyRecord){
-        let newWasdInput;
-        if (keyRecord.length === 0) newWasdInput = 'none'
-        else if (!keyRecord.includes(this.newWasdInput)){
-            if (keyRecord.includes('a')) newWasdInput = 'a'
-            if (keyRecord.includes('d')) newWasdInput = 'd'
+    update(){
+        const road = this.road;
+        road.frame += 1;
+        if (road.frame>road.frames.length-1) road.frame = 0;
+
+    }
+ 
+    draw(ctx){
+        const {road, rock, game} = this;
+        road.draw(ctx);
+        if (rock.scalar > 4) {
+            game.background = new Background(game, game.backgroundSprites) 
+            return
         }
-        this.wasdInput = newWasdInput;
-
-        if(keyRecord.includes(" ")) this.attackInput = this.wasdInput
-        else this.attackInput = 'none'
+        let oldScaler = rock.scaler
+        let percentTraveled = rock.heightTraveled / (game.height-road.offSetHeight)
+        rock.scalar = 1+(percentTraveled*1.5)
+        
+        rock.width = rock.scalar * rock.initWidth
+        rock.height = rock.scalar * rock.initHeight
+        rock.speed = Math.pow(rock.scalar,1.8) * rock.initSpeed 
+        rock.heightTraveled += rock.speed
         
         
-
-        
-
-        // read the key record, detect if a movement key was pressed, detect if new inputs are priotized or not
-        // send current movement value to Blocking class object, it will create/run through a queue of frames
-        // Player.update can also tell block to fade in/out depending on 
-
-        // let inputCandidate = 'neutral';
-        // if (keyRecord.d.pressed) inputCandidate = 'd'
-        // if (keyRecord.a.pressed) inputCandidate = 'a'
-        // this.input = this.lastInput === 'neutral' || !keyRecord[this.lastInput].pressed ?
-        //     inputCandidate : this.lastInput;
-
-
-        
-
-        // if (keyRecord[' '].pressed && this.inputDelayCounter === 0) {
-        //     Object.values(this.blockDirection).forEach((e) => e = false)
-        //     this.inputDelayCounter = this.attackSprite.frames.length
-        //     this.isAttacking = true;
-        // }
-    }
-    update(keyRecord){
-        if(!this.spritesLoaded) return;
-        this.updateInput(keyRecord)
-        this.block.update(this.wasdInput);
-        this.setState();
-    }
-    draw(){
-        if (!this.spritesLoaded) return;
-        this.block.draw();
-    }
-    setState(){
-        this.state.block = false;
-        if (this.block.frame > 30) this.state.block = 'right' 
-        if (this.block.frame < 6) this.state.block = 'left' 
-        console.log(this.state.block)
-        
-        
-    }
-    
-    fadeOut(){}
-    async #fetchSprites(){
-        const [atkResponse, blockResponse] = await Promise.all([
-            fetch("./sword-attack-1.json"),
-            fetch("./sword48.json")])
-        await atkResponse.json().then((sprite) => {
-            this.attackSprite = sprite
-            this.attackSprite.image = swordAttack
-        });
-        await blockResponse.json().then((sprite) => {
-            this.blockSprite = sprite
-            this.blockSprite.image = swordBlock
-        })
-        this.spritesLoaded = true;
+        const sw = 1600
+        const dx = game.width/2 - rock.width/2
+        const dy = (road.offSetHeight+100) - rock.height
+        const dw = rock.width
+        const dh = rock.height
+        ctx.drawImage(rock.image, 0,0, sw, sw, dx, dy + rock.heightTraveled, dw, dw)
     }
 }
 
-class Block{
+class Sprite{
+    constructor(sprite){
+        this.offSetWidth = 0;
+        this.offSetHeight = 0;
+        this.image = new Image()
+        this.image.src = `./${sprite.meta.image}`
+        this.frame = 0;
+        this.sprite = sprite;
+        this.frames = sprite.frames
+        this.sway = 0;
+        this.bounce = 0;
+    }
+    get frameData(){
+        return this.frames[this.frame].frame
+    }
+   
+    draw(ctx){
+        let frame = this.frameData
+        ctx.drawImage(
+            this.image, frame.x, frame.y, frame.w, frame.h, 
+            this.offSetWidth + this.sway, this.offSetHeight + this.bounce,frame.w, frame.h)
+    }
+}
+
+
+class Player{
+    constructor(game, sprites){
+        this.game = game;
+        this.block = sprites.block
+            this.block.offSetWidth = this.game.width * 0.1;
+            this.block.offSetHeight =  this.game.height * 0.25;
+            this.block.frame = 18;
+            this.block.frameIncrement = 1;
+            this.block.frameQueue = [18];
+            this.block.positionInQueue = 0;
+            this.block.frameDestinations = {'none':18, 'a':0, 'd':35} 
+            this.block.middleSkipRange = [12,26] 
+            this.block.earlyFramesToSkip = 5
+            this.block.inputDelayCounter = 0;
+            this.sway = 0;
+            this.bounce = 0;
+        this.attack = sprites.attack
+            this.attack.offSetWidth = this.game.width * 0.3;
+            this.attack.offSetHeight = this.game.height * 0.25;
+            this.frame = -1;
+        this.input = 'none'
+        this.attackInput = true;
+        this.state = {block:false, attack:false}
+    }
+    
+    readInput(keyRecord){
+        let newInput;
+        if (keyRecord.length === 0) this.input = 'none'
+        else if (!keyRecord.includes(this.Input)){
+            newInput = 'none'
+            if (keyRecord.includes('a')) newInput = 'a'
+            if (keyRecord.includes('d')) newInput = 'd'
+            this.input = newInput;
+        }
+        if(keyRecord.includes(" ")) this.attackInput = true;
+        else this.attackInput = false;
+
+    }
+    update(keyRecord){
+        this.readInput(keyRecord)
+        this.attack.isAttacking ? this.updateAttack() : this.updateBlock();
+    }
+    draw(){
+        this.attack.isAttacking ? this.attack.draw(this.game.ctx) : this.block.draw(this.game.ctx);
+    }
+    updateBlock(){
+        const block = this.block;
+        this.updateBounceSway(block)
+        if (--block.inputDelayCounter >= 0) this.input = block.oldInput
+        if (this.input !== block.oldInput) {
+            block.inputDelayCounter = 4;
+            this.makeFrameQueue(block, this.input)
+        }
+        block.oldInput = this.input;
+        if (block.positionInQueue !== block.frameQueue.length) block.frame = block.frameQueue[block.positionInQueue++]
+    }
+    makeFrameQueue(block, newInput){
+        block.frameQueue = [];
+        block.positionInQueue = 0;
+        let frameEnd = block.frameDestinations[newInput]; 
+        let increment = Math.sign(frameEnd-block.frame)
+        let skipMiddleFrames = false;
+        if (Object.values(block.frameDestinations).includes(block.frame)) {
+            block.frame += block.earlyFramesToSkip * increment
+        }
+        for (let i = block.frame + increment; i !== frameEnd + increment; i += increment){
+            block.frameQueue.push(i)
+        }
+        if(Math.abs(block.frame - frameEnd) > block.frames.length/2) {
+            block.frameQueue = block.frameQueue.filter((e) => e < block.middleSkipRange[0] || e > block.middleSkipRange[1])
+        }
+        
+    }
+    updateBounceSway(block) {
+        let counter = this.game.totalFrames;
+        let bounceModifier = Math.sin(counter / 10) * 15;
+        let swayModifier = Math.cos(counter / 20) * 10;
+        if (bounceModifier > 0) bounceModifier *= -1;
+        if (swayModifier > 0) swayModifier *= -1;
+        block.sway = swayModifier;
+        block.bounce = bounceModifier;
+    }
+    setState(){
+        this.state.block = false;
+        this.state.attack = false;
+        if (this.block.frame > 30) this.state.block = 'd' 
+        if (this.block.frame < 6) this.state.block = 'a' 
+        if (this.attack.isAttacking) this.state.block = false;
+        if (this.attack.frame > 18 && this.attack.frame < 28){
+            this.state.attack = this.attack.attackDirection
+        }
+        
+    }
+}
+
+class Attack{
     constructor(game, sprite){
         this.game = game
         this.ctx = game.ctx
-        this.input = 'none'
-        this.offSetWidth = 0 + game.width * 0.1;
-        this.offSetHeight = 0 + game.height * 0.15;
+        this.isAttacking = false;
+        this.attackDirection = 'none'
+        this.offSetWidth = game.width * 0.3;
+        this.offSetHeight = game.height * 0.25;
         this.sprite = sprite;
         this.framesArr = sprite.frames
-        this.frame = 18;
-        this.frameIncrement = 1;
-        this.frameQueue = [18];
-        this.positionInQueue = 0;
-        this.frameDestinations = {'none':18, 'a':0, 'd':35} 
-        this.middleFramesToSkip = 10 
-        this.earlyFramesToSkip = 5
-        this.inputDelayCounter = 0;
-        
-        
+        this.length = this.framesArr.length
+        this.frame = -1;
+        this.attackDirection = 'none';
     }
-    makeNewFrameQueue(newInput='none'){
-        let frameEnd = this.frameDestinations[newInput];
-        
-        this.frameQueue = [];
-       
-        let increment = Math.sign(frameEnd-this.frame)
-        let skipMiddleFrames = false;
-
-        if (Object.values(this.frameDestinations).includes(this.frame)) {
-            
-            this.frame += this.earlyFramesToSkip * increment
-        }
-        if(Math.abs(this.frame - frameEnd)> 18) {
-            skipMiddleFrames = true;
-            
-        }
-        
-        for (let i = this.frame + increment; i !== frameEnd + increment; i += increment){
-            if (skipMiddleFrames && (i>11 && i<27)) continue;
-            this.frameQueue.push(i)
-        }
-        this.positionInQueue = 0;
-        
-        
-    }
-    update(input){
-        if (this.inputDelayCounter > 0) {
-            input = this.input
-            this.inputDelayCounter -= 1;
-        }
-        if (input !== this.input) {
-            this.inputDelayCounter = 4;
-            this.makeNewFrameQueue(input)
-            
-        }
-        this.input = input;
-        
-        if (this.positionInQueue !== this.frameQueue.length) this.frame = this.frameQueue[this.positionInQueue++]
-        return;
-        
-
+    update(wasdInput, isAttacking){
+        if (!this.isAttacking) this.isAttacking = isAttacking;
+        if (!this.isAttacking) return;
+        if (this.frame < 0) this.attackDirection = wasdInput;
+        this.frame++;
+        if (this.frame === this.framesArr.length - 1){
+            this.frame = -1;
+            this.isAttacking = undefined;
+        };
     }
     draw(){
-        
+        if (this.frame < 0) return;
+        let ctx = this.ctx
         let frame = this.framesArr[this.frame].frame
-        
-        ctx.drawImage(this.sprite.image, frame.x, frame.y,
+        ctx.save()
+        this.directAttack();
+        this.ctx.drawImage(this.sprite.image, frame.x, frame.y,
             frame.w, frame.h,
             this.offSetWidth,
             this.offSetHeight,
             frame.w, frame.h)
+        ctx.restore();
     }
+    directAttack(){
+        ctx.translate(this.game.width/2, this.game.height)
+        if (this.attackDirection === 'd'){
+            ctx.rotate(0.75)
+            ctx.scale(-1,1)
+        } else if (this.attackDirection === 'a') {
+            ctx.rotate(-0.75)
+        }
+        ctx.translate(-this.game.width/2, -this.game.height)
+        if (this.attackDirection === 'none') ctx.translate(0,this.game.height*0.15)
+    }
+    
+    
 }
 
-class Attack{}
 
+(async function fetchSprites(){
+    let playerSprites = {}
+    let backgroundSprites = {}
+    const [atkResponse, blockResponse, roadResponse] = await Promise.all([
+        fetch("./sword-attack-v2.json"),
+        fetch("./sword48.json"),
+        fetch("./road_background.json")])
+        
+    await atkResponse.json().then((sprite) => {
+        const attack = new Sprite(sprite)
+        playerSprites.attack = attack;
+    });
+    await blockResponse.json().then((sprite) => {
+        const block = new Sprite(sprite)
+        playerSprites.block = block;
+    });
+    await roadResponse.json().then((sprite) => {
+        const road = new Sprite(sprite)
+        backgroundSprites.road = road;
+    });
+    startGame(playerSprites,backgroundSprites);
 
+})();
 
-// class Backgrounds extends Game{}
-
-// class Enemies extends Game{}
-
-let game = new Game(ctx, CANVAS_WIDTH, CANVAS_HEIGHT)
-animate(0);
-
-function animate(timestamp){
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+function startGame(playerSprites,backgroundSprites){ 
+  let game = new Game(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, playerSprites, backgroundSprites)
+  animate(0,game);  
+}
+function animate(timestamp, game){
+    // ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     game.update(timestamp, keyRecord)
-    game.draw();
-    requestAnimationFrame(animate)
+    requestAnimationFrame((timestamp)=>{
+        animate(timestamp, game)
+    })
 }
 
 
