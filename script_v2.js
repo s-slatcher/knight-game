@@ -71,11 +71,13 @@ class Background{
         this.rock = {}
         this.rock.image = new Image()
         this.rock.image.src = "./rock.png"
-        this.rock.initHeight = 180
-        this.rock.initWidth = 90
+        this.rock.initWidth = this.rock.image.width/4
+        this.rock.initHeight = this.rock.image.height/4
         this.rock.initSpeed = 1.3;
         this.rock.scaler = 1;
+        this.rock.maxScaler = 1.35 //diference in width from top-bottom of road
         this.rock.heightTraveled = 0;
+        this.rock.distanceFromCenter = 0;
         this.rock.speed = this.rock.initSpeed;
     }
     update(){
@@ -88,26 +90,28 @@ class Background{
     draw(ctx){
         const {road, rock, game} = this;
         road.draw(ctx);
-        if (rock.scalar > 4) {
-            game.background = new Background(game, game.backgroundSprites) 
-            return
-        }
+
         let oldScaler = rock.scaler
-        let percentTraveled = rock.heightTraveled / (game.height-road.offSetHeight)
-        rock.scalar = 1+(percentTraveled*1.5)
+        let percentTraveled = rock.heightTraveled / (game.height-(road.offSetHeight))
+        rock.scalar = 1+(percentTraveled*rock.maxScaler)
         
         rock.width = rock.scalar * rock.initWidth
         rock.height = rock.scalar * rock.initHeight
-        rock.speed = Math.pow(rock.scalar,1.8) * rock.initSpeed 
+        rock.speed = Math.pow(rock.scalar,2) * rock.initSpeed 
         rock.heightTraveled += rock.speed
         
         
-        const sw = 1600
-        const dx = game.width/2 - rock.width/2
-        const dy = (road.offSetHeight+100) - rock.height
+        
+        const sw = 360
+        const sh = 235
+        const dx = game.width/2 - rock.width/2 + (rock.distanceFromCenter * rock.scalar)
+        const dy = (road.offSetHeight - rock.height)
         const dw = rock.width
         const dh = rock.height
-        ctx.drawImage(rock.image, 0,0, sw, sw, dx, dy + rock.heightTraveled, dw, dw)
+        
+        
+        ctx.drawImage(rock.image, 0,0, sw, sh, dx, dy + rock.heightTraveled, dw, dh)
+        
     }
 }
 
@@ -131,7 +135,7 @@ class Sprite{
         let frame = this.frameData
         ctx.drawImage(
             this.image, frame.x, frame.y, frame.w, frame.h, 
-            this.offSetWidth + this.sway, this.offSetHeight + this.bounce,frame.w, frame.h)
+            this.offSetWidth + this.sway, this.offSetHeight + this.bounce, frame.w, frame.h)
     }
 }
 
@@ -139,6 +143,7 @@ class Sprite{
 class Player{
     constructor(game, sprites){
         this.game = game;
+        this.ctx = this.game.ctx
         this.block = sprites.block
             this.block.offSetWidth = this.game.width * 0.1;
             this.block.offSetHeight =  this.game.height * 0.25;
@@ -154,10 +159,14 @@ class Player{
             this.bounce = 0;
         this.attack = sprites.attack
             this.attack.offSetWidth = this.game.width * 0.3;
-            this.attack.offSetHeight = this.game.height * 0.25;
-            this.frame = -1;
+            this.attack.offSetHeight = this.game.height * 0.5;
+            this.frame = 0;
+            this.attack.direction = 'none'
+            this.block.inputDelayCounter = 0;
         this.input = 'none'
         this.attackInput = true;
+        
+        this.isAttacking = false;
         this.state = {block:false, attack:false}
     }
     
@@ -170,20 +179,37 @@ class Player{
             if (keyRecord.includes('d')) newInput = 'd'
             this.input = newInput;
         }
-        if(keyRecord.includes(" ")) this.attackInput = true;
-        else this.attackInput = false;
+        if(keyRecord.includes(" ")) this.isAttacking = true;
+        
 
     }
     update(keyRecord){
         this.readInput(keyRecord)
-        this.attack.isAttacking ? this.updateAttack() : this.updateBlock();
+        this.updateBounceSway()
+        this.isAttacking ? this.updateAttack() : this.updateBlock();
     }
     draw(){
-        this.attack.isAttacking ? this.attack.draw(this.game.ctx) : this.block.draw(this.game.ctx);
+        if (this.isAttacking) {
+            this.ctx.save()
+            this.directAttack()
+            this.attack.draw(this.ctx)
+            this.ctx.restore();
+            this.ctx.globalAlpha = 0;
+        }
+        this.block.draw(this.ctx);
+        this.ctx.globalAlpha = 1;
+    }
+    updateAttack(){
+        const attack = this.attack
+        if (attack.frame === 0) this.attackDirection = this.input;
+        attack.frame++;
+        if (attack.frame === attack.frames.length){
+            attack.frame = 0;
+            this.isAttacking = false;
+        };
     }
     updateBlock(){
         const block = this.block;
-        this.updateBounceSway(block)
         if (--block.inputDelayCounter >= 0) this.input = block.oldInput
         if (this.input !== block.oldInput) {
             block.inputDelayCounter = 4;
@@ -209,14 +235,28 @@ class Player{
         }
         
     }
-    updateBounceSway(block) {
+    updateBounceSway() {
         let counter = this.game.totalFrames;
         let bounceModifier = Math.sin(counter / 10) * 15;
         let swayModifier = Math.cos(counter / 20) * 10;
         if (bounceModifier > 0) bounceModifier *= -1;
         if (swayModifier > 0) swayModifier *= -1;
-        block.sway = swayModifier;
-        block.bounce = bounceModifier;
+        this.block.sway = swayModifier;
+        this.block.bounce = bounceModifier;
+        this.attack.sway = swayModifier;
+        this.attack.bounce = bounceModifier;
+    }
+    directAttack(){
+        const ctx = this.ctx;
+        ctx.translate(this.game.width/2, this.game.height)
+        if (this.attackDirection === 'd'){
+            ctx.rotate(0.75)
+            ctx.scale(-1,1)
+        } else if (this.attackDirection === 'a') {
+            ctx.rotate(-0.75)
+        }
+        ctx.translate(-this.game.width/2, -this.game.height)
+        if (this.attackDirection === 'none') ctx.translate(0,this.game.height*0.15)
     }
     setState(){
         this.state.block = false;
