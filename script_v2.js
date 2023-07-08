@@ -30,26 +30,50 @@ class Game{
         this.testX = 0;
         this.totalFrames = 0;
         this.speedModifier = 1;
+        this.foregroundStart = 0.3*this.height //first value will need to go up as height value increases, or road will pop off screen 
+        this.maxPerspectiveScale = 3.6*(1-this.foregroundStart/this.height) //3.23  ->  value comes from the perspective built into the road animation
+        this.backgroundSpeed = 1.2 //1.3 pixels/frame -> value comes from speed built into the road animation
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
         this.background = new Background(this, backgroundSprites)
+        this.testRocks = []
         this.fpsSlider = document.getElementById("fps")
     }
     update(timestamp, keyRecord){
-        this.fps = this.fpsSlider.value
+        //this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
         for (let i = 0; i < framesDue; i++) {
             this.testX += 5;
             this.totalFrames++;
             this.player.update(keyRecord)
             this.background.update()
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             this.draw();
+            if (Math.random()*20 < 1) this.testRocks.push(new LocalImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*500))
+            this.testRocks.forEach((e) => this.moveWithPerspective(e))
+            this.testRocks.sort((a,b) => a.dy - b.dy);
+            console.log(this.testRocks.length)
+            
         }
     }
+    moveWithPerspective(image){
+        let heightTraveled = image.dy - this.foregroundStart + image.dh
+        if (heightTraveled < 0) heightTraveled = 0;
+        //if (!image.heightTraveled) image.heightTraveled = 0;
+        let percentTraveled = heightTraveled / (this.height-(this.foregroundStart))
+        let perspectiveScale = (1+(percentTraveled*(this.maxPerspectiveScale-1)))
+        let speed = Math.pow(perspectiveScale,2) * this.backgroundSpeed
+        heightTraveled += speed
+        image.dw =  perspectiveScale * image.sw * image.scale
+        image.dh =  perspectiveScale * image.sh * image.scale
+        image.dy = (this.foregroundStart - image.dh + heightTraveled)
+        image.dx = this.width/2 - image.dw/2 + (image.centerOffset * perspectiveScale)
+        
+    }
     draw(){
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         this.ctx.fillRect(this.testX,this.height/2,50,50);
         this.background.draw(this.ctx);
+        this.testRocks.forEach((e) => e.draw(this.ctx))
         this.player.draw();
     }
     getFramesDue(timestamp){
@@ -67,60 +91,55 @@ class Background{
         this.game = game;
         this.road = sprites.road
             this.road.offSetWidth = this.game.width/2 - this.road.frameData.w/2
-            this.road.offSetHeight = this.game.height - this.road.frameData.h * 0.75
-        this.rock = {}
-        this.rock.image = new Image()
-        this.rock.image.src = "./rock.png"
-        this.rock.initWidth = this.rock.image.width/4
-        this.rock.initHeight = this.rock.image.height/4
-        this.rock.initSpeed = 1.3;
-        this.rock.scaler = 1;
-        this.rock.maxScaler = 1.35 //diference in width from top-bottom of road
-        this.rock.heightTraveled = 0;
-        this.rock.distanceFromCenter = 0;
-        this.rock.speed = this.rock.initSpeed;
+            this.road.offSetHeight = this.game.foregroundStart 
+        
+        this.rock2 = new LocalImage('rock.png',0.25, 100)
+        
+        
     }
     update(){
         const road = this.road;
         road.frame += 1;
         if (road.frame>road.frames.length-1) road.frame = 0;
-
+        this.game.moveWithPerspective(this.rock2)
     }
  
     draw(ctx){
         const {road, rock, game} = this;
+        
         road.draw(ctx);
-
-        let oldScaler = rock.scaler
-        let percentTraveled = rock.heightTraveled / (game.height-(road.offSetHeight))
-        rock.scalar = 1+(percentTraveled*rock.maxScaler)
+        this.rock2.draw(ctx);
         
-        rock.width = rock.scalar * rock.initWidth
-        rock.height = rock.scalar * rock.initHeight
-        rock.speed = Math.pow(rock.scalar,2) * rock.initSpeed 
-        rock.heightTraveled += rock.speed
-        
-        
-        
-        const sw = 360
-        const sh = 235
-        const dx = game.width/2 - rock.width/2 + (rock.distanceFromCenter * rock.scalar)
-        const dy = (road.offSetHeight - rock.height)
-        const dw = rock.width
-        const dh = rock.height
-        
-        
-        ctx.drawImage(rock.image, 0,0, sw, sh, dx, dy + rock.heightTraveled, dw, dh)
         
     }
 }
+class LocalImage{
+    constructor(fileName, scale = 1, centerOffset){
+    this.scale = scale
+    this.image = new Image()
+    this.image.src = `./${fileName}`
+    this.sw = this.image.width;
+    this.sh = this.image.height
+    this.sx = 0
+    this.sy = 0
+    this.dx = 0;
+    this.dy = 0;
+    this.dw = this.sw*this.scale
+    this.dh = this.sh*this.scale
+    this.centerOffset = centerOffset
+    }
+    draw(ctx){
+        const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
+        
+        ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
+    }
+}
 
-class Sprite{
+class Sprite extends LocalImage{
     constructor(sprite){
+        super(sprite.meta.image)
         this.offSetWidth = 0;
         this.offSetHeight = 0;
-        this.image = new Image()
-        this.image.src = `./${sprite.meta.image}`
         this.frame = 0;
         this.sprite = sprite;
         this.frames = sprite.frames
@@ -269,58 +288,6 @@ class Player{
         }
         
     }
-}
-
-class Attack{
-    constructor(game, sprite){
-        this.game = game
-        this.ctx = game.ctx
-        this.isAttacking = false;
-        this.attackDirection = 'none'
-        this.offSetWidth = game.width * 0.3;
-        this.offSetHeight = game.height * 0.25;
-        this.sprite = sprite;
-        this.framesArr = sprite.frames
-        this.length = this.framesArr.length
-        this.frame = -1;
-        this.attackDirection = 'none';
-    }
-    update(wasdInput, isAttacking){
-        if (!this.isAttacking) this.isAttacking = isAttacking;
-        if (!this.isAttacking) return;
-        if (this.frame < 0) this.attackDirection = wasdInput;
-        this.frame++;
-        if (this.frame === this.framesArr.length - 1){
-            this.frame = -1;
-            this.isAttacking = undefined;
-        };
-    }
-    draw(){
-        if (this.frame < 0) return;
-        let ctx = this.ctx
-        let frame = this.framesArr[this.frame].frame
-        ctx.save()
-        this.directAttack();
-        this.ctx.drawImage(this.sprite.image, frame.x, frame.y,
-            frame.w, frame.h,
-            this.offSetWidth,
-            this.offSetHeight,
-            frame.w, frame.h)
-        ctx.restore();
-    }
-    directAttack(){
-        ctx.translate(this.game.width/2, this.game.height)
-        if (this.attackDirection === 'd'){
-            ctx.rotate(0.75)
-            ctx.scale(-1,1)
-        } else if (this.attackDirection === 'a') {
-            ctx.rotate(-0.75)
-        }
-        ctx.translate(-this.game.width/2, -this.game.height)
-        if (this.attackDirection === 'none') ctx.translate(0,this.game.height*0.15)
-    }
-    
-    
 }
 
 
