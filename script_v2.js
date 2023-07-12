@@ -27,53 +27,83 @@ class Game{
         this.lastTimeStamp = 0;
         this.frameTimeDeficit = 0;
         this.fps = 48;
-        this.testX = 0;
+        this.framesSinceLastEnemy = 0;
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.foregroundStart = 0.3*this.height //first value will need to go up as height value increases, or road will pop off screen 
         this.maxPerspectiveScale = 3.6*(1-this.foregroundStart/this.height) //3.23  ->  value comes from the perspective built into the road animation
-        this.backgroundSpeed = 1.2 //1.3 pixels/frame -> value comes from speed built into the road animation
+        this.backgroundSpeed = 1.15 //1.3 pixels/frame -> value comes from speed built into the road animation
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
         this.background = new Background(this, backgroundSprites)
         this.testRocks = []
+        this.enemies = [];
         this.fpsSlider = document.getElementById("fps")
     }
     update(timestamp, keyRecord){
-        //this.fps = this.fpsSlider.value
+        this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
         for (let i = 0; i < framesDue; i++) {
-            this.testX += 5;
             this.totalFrames++;
+            this.handleEnemies();
             this.player.update(keyRecord)
             this.background.update()
-            this.draw();
-            if (Math.random()*20 < 1) this.testRocks.push(new LocalImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*500))
-            this.testRocks.forEach((e) => this.moveWithPerspective(e))
-            this.testRocks.sort((a,b) => a.dy - b.dy);
-            console.log(this.testRocks.length)
             
+            //if (Math.random()*20 < 1) this.testRocks.push(new LocalImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*800))
+            this.updatePerpectiveImages()
+            this.draw();
         }
     }
+    handleBackground(){
+        
+    }
+    handleEnemies(){
+        if (this.framesSinceLastEnemy > 30 && Math.random()>0.95) {
+            let randomSign = Math.sign(Math.random()-0.5)
+            let newEnemy = new LocalImage('gaurd_bolt.png',0.3,150*randomSign)
+            if (randomSign > 0) newEnemy.flipped = true;
+            this.enemies.push(newEnemy)
+            this.framesSinceLastEnemy = 0;
+        }
+        else this.framesSinceLastEnemy ++;
+        console.log(this.enemies.length)
+    }
+    updatePerpectiveImages(){
+        this.enemies.forEach((e) => this.moveWithPerspective(e))
+        this.enemies = this.enemies.filter((e) => e.dh < this.height)
+        this.enemies.sort((a,b) => (a.heightTraveled) - (b.heightTraveled));
+        this.enemies.forEach((e) => {
+            let roadSize = this.height - this.foregroundStart
+            e.alpha = 1;
+            if (e.heightTraveled < 10) e.alpha = e.heightTraveled * 0.1
+            if (e.heightTraveled > roadSize - 20) e.alpha = 1 - ((e.heightTraveled) - (roadSize-20))*0.05
+            if (e.alpha < 0) e.alpha = 0;
+        })
+        
+    }
     moveWithPerspective(image){
-        let heightTraveled = image.dy - this.foregroundStart + image.dh
-        if (heightTraveled < 0) heightTraveled = 0;
-        //if (!image.heightTraveled) image.heightTraveled = 0;
-        let percentTraveled = heightTraveled / (this.height-(this.foregroundStart))
-        let perspectiveScale = (1+(percentTraveled*(this.maxPerspectiveScale-1)))
+        if (!image.heightTraveled) image.heightTraveled = 0;
+        
+        let heightPercentTraveled = image.heightTraveled / (this.height-(this.foregroundStart))
+        
+        let perspectiveScale = (1+(heightPercentTraveled*(this.maxPerspectiveScale-1)))
         let speed = Math.pow(perspectiveScale,2) * this.backgroundSpeed
-        heightTraveled += speed
+        let heightDistributionAdjustment = ((image.sh * image.scale) - (image.dh)) * 0.5
+        let widthDistributionAdjustment = ((image.sw * image.scale) - (image.dw)) * (image.centerOffset/(this.width*0.5))
+        image.heightTraveled += speed
         image.dw =  perspectiveScale * image.sw * image.scale
         image.dh =  perspectiveScale * image.sh * image.scale
-        image.dy = (this.foregroundStart - image.dh + heightTraveled)
-        image.dx = this.width/2 - image.dw/2 + (image.centerOffset * perspectiveScale)
+        image.dy = (this.foregroundStart - image.dh + image.heightTraveled - heightDistributionAdjustment)
+        image.dx = this.width/2 - image.dw/2 + (image.centerOffset * perspectiveScale) - widthDistributionAdjustment
         
     }
     draw(){
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         this.ctx.fillRect(this.testX,this.height/2,50,50);
+        this.ctx.fillStyle = '#439544'
+        this.ctx.fillRect(0, this.foregroundStart+2, this.width, this.height-this.foregroundStart)
         this.background.draw(this.ctx);
-        this.testRocks.forEach((e) => e.draw(this.ctx))
+        this.enemies.forEach((e) => e.draw(this.ctx))
         this.player.draw();
     }
     getFramesDue(timestamp){
@@ -93,23 +123,18 @@ class Background{
             this.road.offSetWidth = this.game.width/2 - this.road.frameData.w/2
             this.road.offSetHeight = this.game.foregroundStart 
         
-        this.rock2 = new LocalImage('rock.png',0.25, 100)
-        
         
     }
     update(){
         const road = this.road;
         road.frame += 1;
         if (road.frame>road.frames.length-1) road.frame = 0;
-        this.game.moveWithPerspective(this.rock2)
+        
     }
  
     draw(ctx){
         const {road, rock, game} = this;
-        
         road.draw(ctx);
-        this.rock2.draw(ctx);
-        
         
     }
 }
@@ -122,16 +147,29 @@ class LocalImage{
     this.sh = this.image.height
     this.sx = 0
     this.sy = 0
-    this.dx = 0;
-    this.dy = 0;
+    this.dx = 0
+    this.dy = 0
     this.dw = this.sw*this.scale
     this.dh = this.sh*this.scale
     this.centerOffset = centerOffset
+    this.alpha = 1
+    this.flipped = false;
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
-        
+        ctx.save()
+        if (this.flipped) {
+            this.flipHorizontal(ctx);
+            
+        }
+        ctx.globalAlpha = this.alpha
         ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
+        ctx.restore();
+    }
+    flipHorizontal(ctx){
+        ctx.translate(this.dx+(this.dw/2),0)
+        ctx.scale(-1,1)
+        ctx.translate(-(this.dx+(this.dw/2)),0)
     }
 }
 
@@ -184,7 +222,6 @@ class Player{
             this.block.inputDelayCounter = 0;
         this.input = 'none'
         this.attackInput = true;
-        
         this.isAttacking = false;
         this.state = {block:false, attack:false}
     }
@@ -198,7 +235,7 @@ class Player{
             if (keyRecord.includes('d')) newInput = 'd'
             this.input = newInput;
         }
-        if(keyRecord.includes(" ")) this.isAttacking = true;
+        if(keyRecord.includes(" ")) this.attackTransition();
         
 
     }
@@ -217,6 +254,10 @@ class Player{
         }
         this.block.draw(this.ctx);
         this.ctx.globalAlpha = 1;
+    }
+    attackTransition(){
+        this.isAttacking = true;
+        
     }
     updateAttack(){
         const attack = this.attack
@@ -268,11 +309,13 @@ class Player{
     directAttack(){
         const ctx = this.ctx;
         ctx.translate(this.game.width/2, this.game.height)
+        ctx.scale(1.2,1)
         if (this.attackDirection === 'd'){
             ctx.rotate(0.75)
-            ctx.scale(-1,1)
+            ctx.scale(-1.2,1)
         } else if (this.attackDirection === 'a') {
             ctx.rotate(-0.75)
+            
         }
         ctx.translate(-this.game.width/2, -this.game.height)
         if (this.attackDirection === 'none') ctx.translate(0,this.game.height*0.15)
@@ -294,25 +337,15 @@ class Player{
 (async function fetchSprites(){
     let playerSprites = {}
     let backgroundSprites = {}
-    const [atkResponse, blockResponse, roadResponse] = await Promise.all([
+    const [atkRep, blockRep, roadRep] = await Promise.all([
         fetch("./sword-attack-v2.json"),
         fetch("./sword48.json"),
-        fetch("./road_background.json")])
-        
-    await atkResponse.json().then((sprite) => {
-        const attack = new Sprite(sprite)
-        playerSprites.attack = attack;
-    });
-    await blockResponse.json().then((sprite) => {
-        const block = new Sprite(sprite)
-        playerSprites.block = block;
-    });
-    await roadResponse.json().then((sprite) => {
-        const road = new Sprite(sprite)
-        backgroundSprites.road = road;
-    });
+        fetch("./road_background_v3.json"),
+        fetch ("./gaurd_bolt.png")])
+    await atkRep.json().then((sprite) => playerSprites.attack = new Sprite(sprite));
+    await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite));
+    await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite));
     startGame(playerSprites,backgroundSprites);
-
 })();
 
 function startGame(playerSprites,backgroundSprites){ 
