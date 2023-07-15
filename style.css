@@ -3,15 +3,37 @@ body {
 }
 
 
-canvas {
+canvas, #pauseMenu {
     position: absolute;
     border: 3px solid black;
     width: 1000px;
     height: 750px;
     top: 50%;
     left: 50%;
-    
-    transform: translate(-50%,-50%);   
+    transform: translate(-50%,-50%); 
+    transition: filter 50ms;  
+}
+#pauseMenu {
+   display: none;
+   opacity: 0;
+   
+   font-family: 'Lugrasimo', cursive;
+   background-color: rgba(0, 0, 0, 0.6); 
+   transition: opacity 50ms;
+}
+#pauseMenu > #title {
+   color: rgb(226, 226, 213);
+   font-size: 2.75rem; 
+}
+
+#pauseMenu.active {
+    display: flex;
+    opacity: 1;
+    justify-content: center;
+}
+
+.blur{
+    filter: blur(0.5rem);
 }
 
 img {

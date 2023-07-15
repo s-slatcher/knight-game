@@ -2,16 +2,22 @@ window.addEventListener('load', function(){
 
 const keyRecord = [];
 window.addEventListener('keydown', (e) => {
-    if (keyRecord.indexOf(e.key) === -1) keyRecord.push(e.key)
-    if (e.key === ' ') e.preventDefault();
+    let key = e.key.length > 1 ? e.key : e.key.toLowerCase();
+    if (keyRecord.indexOf(key) === -1) keyRecord.push(key)
+    if (key.length === 1) 
+    if (key === ' ' || key === 'Escape') e.preventDefault();
 })
 window.addEventListener('keyup', (e) => {
-    keyRecord.splice(keyRecord.indexOf(e.key),1)
+    let key = e.key.length > 1 ? e.key : e.key.toLowerCase();
+    keyRecord.splice(keyRecord.indexOf(key),1)
 })
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
 
+
+
 document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
+
 
 const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
@@ -36,74 +42,118 @@ class Game{
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
         this.background = new Background(this, backgroundSprites)
-        this.testRocks = []
         this.enemies = [];
+        this.projectiles = [];
+        this.trees = [];
         this.fpsSlider = document.getElementById("fps")
+        this.castleBg = new GameImage('castle_bg.jpg',1.2,-300)
+        this.castleBg.dy = -700
+        
     }
     update(timestamp, keyRecord){
+        
         this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
+
+        if (keyRecord.includes('Escape') && !this.isPaused) {
+            keyRecord.splice(keyRecord.indexOf('Escape'),1)
+            this.isPaused = true
+            canvas.classList.add('blur')
+            pauseMenu.classList.add('active')
+            return;
+        }
+        if (this.isPaused) {
+            if (keyRecord.includes('Escape')) {
+                this.isPaused = false;
+                canvas.classList.remove('blur')
+                pauseMenu.classList.remove('active')
+                keyRecord.splice(keyRecord.indexOf('Escape'),1)
+            }
+            return;
+        }
         for (let i = 0; i < framesDue; i++) {
             this.totalFrames++;
             this.handleEnemies();
+            this.handleBackground();
             this.player.update(keyRecord)
             this.background.update()
-            
-            //if (Math.random()*20 < 1) this.testRocks.push(new LocalImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*800))
+        
+            //if (Math.random()*20 < 1) this.testRocks.push(new GameImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*800))
             this.updatePerpectiveImages()
-            this.draw();
+            this.draw(this.ctx);
         }
     }
     handleBackground(){
-        
-    }
-    handleEnemies(){
-        if (this.framesSinceLastEnemy > 30 && Math.random()>0.95) {
-            let randomSign = Math.sign(Math.random()-0.5)
-            let newEnemy = new LocalImage('gaurd_bolt.png',0.3,150*randomSign)
-            if (randomSign > 0) newEnemy.flipped = true;
-            this.enemies.push(newEnemy)
-            this.framesSinceLastEnemy = 0;
+        if (this.totalFrames % 24/this.speedModifier === 1) {
+
+            this.trees.unshift(new GameImage("tree.png",0.6,Math.random()*30+275)) 
+            this.trees.unshift(new GameImage("tree.png",0.6,-(Math.random()*30+275))) 
+            
+            this.trees[0].alpha = 0;
+            this.trees[1].alpha = 0;
+            
+            this.trees = this.trees.filter((e) => e.dh < this.height)
+            
         }
-        else this.framesSinceLastEnemy ++;
-        console.log(this.enemies.length)
+        this.trees.forEach((e) => this.moveWithPerspective(e))
+    }   
+    handleEnemies(){
+        if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
+            let randomSign = Math.sign(Math.random()-0.5)
+            let newEnemy;
+            
+            newEnemy = new GameImage('gaurd_bolt.png',0.25,150*randomSign)
+            newEnemy.alpha = 0;
+            if (randomSign > 0) newEnemy.flipped = true;
+            this.enemies.unshift(newEnemy)
+            this.framesSinceLastEnemy = 0;
+        } else this.framesSinceLastEnemy ++;
+        
+        
+        this.enemies.forEach((e) => { e.framesAlive++})
+           
+
     }
     updatePerpectiveImages(){
         this.enemies.forEach((e) => this.moveWithPerspective(e))
         this.enemies = this.enemies.filter((e) => e.dh < this.height)
-        this.enemies.sort((a,b) => (a.heightTraveled) - (b.heightTraveled));
         this.enemies.forEach((e) => {
-            let roadSize = this.height - this.foregroundStart
-            e.alpha = 1;
-            if (e.heightTraveled < 10) e.alpha = e.heightTraveled * 0.1
-            if (e.heightTraveled > roadSize - 20) e.alpha = 1 - ((e.heightTraveled) - (roadSize-20))*0.05
-            if (e.alpha < 0) e.alpha = 0;
+           if (e.heightTraveled / (this.height-(this.foregroundStart)) > 0.2) {
+            e.image.src = './gaurd_nobolt.png'
+           }
         })
         
     }
     moveWithPerspective(image){
         if (!image.heightTraveled) image.heightTraveled = 0;
-        
         let heightPercentTraveled = image.heightTraveled / (this.height-(this.foregroundStart))
-        
         let perspectiveScale = (1+(heightPercentTraveled*(this.maxPerspectiveScale-1)))
         let speed = Math.pow(perspectiveScale,2) * this.backgroundSpeed
         let heightDistributionAdjustment = ((image.sh * image.scale) - (image.dh)) * 0.5
         let widthDistributionAdjustment = ((image.sw * image.scale) - (image.dw)) * (image.centerOffset/(this.width*0.5))
+        //need to start slowing down elements y if their x is moving
         image.heightTraveled += speed
         image.dw =  perspectiveScale * image.sw * image.scale
         image.dh =  perspectiveScale * image.sh * image.scale
         image.dy = (this.foregroundStart - image.dh + image.heightTraveled - heightDistributionAdjustment)
         image.dx = this.width/2 - image.dw/2 + (image.centerOffset * perspectiveScale) - widthDistributionAdjustment
         
+        if (image.heightTraveled < 100) {
+            image.fadeAlpha(0.075*this.speedModifier)
+        }
+        if (image.heightTraveled > this.height - this.foregroundStart - 20) image.fadeAlpha(-0.15)
     }
-    draw(){
+    fireArrow(rightSide){
+        
+    }
+    draw(ctx){
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.ctx.fillRect(this.testX,this.height/2,50,50);
-        this.ctx.fillStyle = '#439544'
-        this.ctx.fillRect(0, this.foregroundStart+2, this.width, this.height-this.foregroundStart)
-        this.background.draw(this.ctx);
-        this.enemies.forEach((e) => e.draw(this.ctx))
+
+        
+        this.background.draw(ctx);
+        this.trees.forEach((e) => e.draw(ctx))
+        this.enemies.forEach((e) => e.draw(ctx))
+        
         this.player.draw();
     }
     getFramesDue(timestamp){
@@ -129,39 +179,52 @@ class Background{
         const road = this.road;
         road.frame += 1;
         if (road.frame>road.frames.length-1) road.frame = 0;
+        if (this.game.totalFrames % 5 === 1) this.game.castleBg.dy += 1;
         
     }
  
     draw(ctx){
-        const {road, rock, game} = this;
+        const {road, game} = this;
+        
+        ctx.save()
+        // const gradient = ctx.createLinearGradient(0,0,0,200)
+        // gradient.addColorStop(1,"#b5dae5")
+        // gradient.addColorStop(0,"#0072b6")
+        // ctx.fillStyle = gradient;
+        game.castleBg.draw(ctx);
+        console.log(game.castleBg.image.src)
+        
+        //ctx.fillRect(0,0,game.width,game.height)
+        ctx.fillStyle = '#439544'
+        ctx.fillRect(0, game.foregroundStart+2, game.width, game.height-game.foregroundStart)
+        ctx.restore();
         road.draw(ctx);
         
     }
 }
-class LocalImage{
-    constructor(fileName, scale = 1, centerOffset){
-    this.scale = scale
+class GameImage{
+    constructor(fileName, initScale = 1, centerOffset = 0){
+    this.scale = initScale
     this.image = new Image()
     this.image.src = `./${fileName}`
     this.sw = this.image.width;
     this.sh = this.image.height
     this.sx = 0
     this.sy = 0
-    this.dx = 0
+    this.dx = 0 + centerOffset
     this.dy = 0
     this.dw = this.sw*this.scale
     this.dh = this.sh*this.scale
     this.centerOffset = centerOffset
     this.alpha = 1
     this.flipped = false;
+    this.framesAlive = 0;
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
         ctx.save()
-        if (this.flipped) {
-            this.flipHorizontal(ctx);
-            
-        }
+        if (this.flipped) this.flipHorizontal(ctx);    
+        
         ctx.globalAlpha = this.alpha
         ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
         ctx.restore();
@@ -171,9 +234,16 @@ class LocalImage{
         ctx.scale(-1,1)
         ctx.translate(-(this.dx+(this.dw/2)),0)
     }
+    fadeAlpha(increment){
+        if (increment === 0) return;
+        let alpha = this.alpha + increment
+        if (alpha > 1) alpha = 1;
+        if (alpha < 0) alpha = 0;
+        this.alpha = alpha;
+    }
 }
 
-class Sprite extends LocalImage{
+class Sprite extends GameImage{
     constructor(sprite){
         super(sprite.meta.image)
         this.offSetWidth = 0;
@@ -190,10 +260,14 @@ class Sprite extends LocalImage{
    
     draw(ctx){
         let frame = this.frameData
+        ctx.save();
+        ctx.globalAlpha = this.alpha
         ctx.drawImage(
             this.image, frame.x, frame.y, frame.w, frame.h, 
             this.offSetWidth + this.sway, this.offSetHeight + this.bounce, frame.w, frame.h)
+        ctx.restore();
     }
+    
 }
 
 
@@ -245,15 +319,16 @@ class Player{
         this.isAttacking ? this.updateAttack() : this.updateBlock();
     }
     draw(){
-        if (this.isAttacking) {
+        if (this.isAttacking ) {
             this.ctx.save()
             this.directAttack()
             this.attack.draw(this.ctx)
             this.ctx.restore();
-            this.ctx.globalAlpha = 0;
-        }
+            this.block.fadeAlpha(-0.2)
+        } else this.block.fadeAlpha(0.2);
+        
         this.block.draw(this.ctx);
-        this.ctx.globalAlpha = 1;
+        
     }
     attackTransition(){
         this.isAttacking = true;
@@ -263,11 +338,14 @@ class Player{
         const attack = this.attack
         if (attack.frame === 0) this.attackDirection = this.input;
         attack.frame++;
-        if (attack.frame === attack.frames.length){
-            attack.frame = 0;
+
+        if (attack.frame === attack.frames.length) {
+            attack.frame = 0; 
             this.isAttacking = false;
+        }
         };
-    }
+            
+    
     updateBlock(){
         const block = this.block;
         if (--block.inputDelayCounter >= 0) this.input = block.oldInput
@@ -283,7 +361,6 @@ class Player{
         block.positionInQueue = 0;
         let frameEnd = block.frameDestinations[newInput]; 
         let increment = Math.sign(frameEnd-block.frame)
-        let skipMiddleFrames = false;
         if (Object.values(block.frameDestinations).includes(block.frame)) {
             block.frame += block.earlyFramesToSkip * increment
         }
@@ -297,14 +374,12 @@ class Player{
     }
     updateBounceSway() {
         let counter = this.game.totalFrames;
-        let bounceModifier = Math.sin(counter / 10) * 15;
-        let swayModifier = Math.cos(counter / 20) * 10;
+        let bounceModifier = Math.sin(counter / 7.5) * 15;
+        let swayModifier = Math.cos(counter / 15) * 10;
         if (bounceModifier > 0) bounceModifier *= -1;
         if (swayModifier > 0) swayModifier *= -1;
-        this.block.sway = swayModifier;
-        this.block.bounce = bounceModifier;
-        this.attack.sway = swayModifier;
-        this.attack.bounce = bounceModifier;
+        this.block.sway = this.attack.sway = swayModifier;
+        this.block.bounce = this.attack.bounce = bounceModifier;
     }
     directAttack(){
         const ctx = this.ctx;

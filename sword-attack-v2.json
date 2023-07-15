@@ -287,6 +287,24 @@
 	"trimmed": false,
 	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
 	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20035 --- fake empty frame added", 
+	"frame": {"x":3204,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+	
+}
+,{
+	"filename": "sword-attack-v20035 --- fake empty frame added", 
+	"frame": {"x":3204,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+	
 }],
 "meta": {
 	"app": "Adobe Animate",
