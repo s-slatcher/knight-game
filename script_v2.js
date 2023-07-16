@@ -1,6 +1,9 @@
 window.addEventListener('load', function(){
 
 const keyRecord = [];
+const touchRecord = {touchX:[], touchY:[]};
+
+
 window.addEventListener('keydown', (e) => {
     let key = e.key.length > 1 ? e.key : e.key.toLowerCase();
     if (keyRecord.indexOf(key) === -1) keyRecord.push(key)
@@ -30,17 +33,46 @@ document.getElementById("fps").addEventListener('change', (e) => (console.log(e.
 
 const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
-const CANVAS_WIDTH = canvas.width = 1000;
-const CANVAS_HEIGHT = canvas.height = 750;
 
-// canvas.addEventListener("touchstart", process_touchstart, false);
-// canvas.addEventListener("touchmove", process_touchmove, false);
-// canvas.addEventListener("touchcancel", process_touchcancel, false);
-// canvas.addEventListener("touchend", process_touchend, false);
-// function process_touchmove(ev) {
-//     // Set call preventDefault()
-//     ev.preventDefault();
-//   }
+if (window.innerWidth > window.innerHeight) {
+    canvas.style.aspectRatio = "1/0.75"
+    canvas.width = 1000;
+    canvas.height = 750;
+} else {
+    canvas.style.aspectRatio = "1/2"
+    canvas.width = 1000;
+    canvas.height = 2000;
+}
+
+canvas.addEventListener("touchstart", handleStart);
+canvas.addEventListener("touchmove", handleMove);
+canvas.addEventListener("touchend", handleEnd);
+// canvas.addEventListener("touchcancel", handleEnd);
+
+function handleStart(e){
+    canvas.removeEventListener("touchstart", handleStart)
+    touchRecord.touchY.push([...e.changedTouches][0].pageY)
+    touchRecord.touchX.push([...e.changedTouches][0].pageX)
+    console.log([...e.changedTouches][0].pageX)
+    
+    if (e.changedTouches.length > 1) return;
+    // const dot = document.createElement('div')
+    // dot.classList.add("dot")
+    // dot.style.top = `${touch.pageY}px`
+    // dot.style.left = `${touch.pageX}px`
+    // document.body.append(dot);
+}
+function handleEnd(e){
+    canvas.addEventListener("touchstart", handleStart)    
+    touchRecord.touchY = [];
+    touchRecord.touchX = [];
+    
+}
+function handleMove(e){
+    e.preventDefault();
+    touchRecord.touchY.push([...e.changedTouches][0].pageY)
+    touchRecord.touchX.push([...e.changedTouches][0].pageX)
+}
 
 
 class Game{
@@ -54,12 +86,11 @@ class Game{
         this.framesSinceLastEnemy = 0;
         this.totalFrames = 0;
         this.speedModifier = 1;
-        this.foregroundStart = 0.3*this.height //first value will need to go up as height value increases, or road will pop off screen 
-        this.maxPerspectiveScale = 3.5*(1-this.foregroundStart/this.height) //3.23  ->  value comes from the perspective built into the road animation
+        this.foregroundStart = this.height - 600//first value will need to go up as height value increases, or road will pop off screen 
+        this.maxPerspectiveScale = 2.7 //3.23  ->  value comes from the perspective built into the road animation
         this.backgroundSpeed = 1.2 //1.3 pixels/frame -> value comes from speed built into the road animation
         this.roadTriangleHeight = 1000  //estimated from image
         this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
-        
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
         this.background = new Background(this, backgroundSprites)
@@ -71,7 +102,7 @@ class Game{
         this.castleBg.dy = -700
         
     }
-    update(timestamp, keyRecord){
+    update(timestamp, keyRecord, touchRecord){
         
         this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
@@ -96,7 +127,7 @@ class Game{
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
-            this.player.update(keyRecord)
+            this.player.update(keyRecord, touchRecord)
             this.background.update()
         
             //if (Math.random()*20 < 1) this.testRocks.push(new GameImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*800))
@@ -152,7 +183,7 @@ class Game{
         if (!image.heightTraveled) image.heightTraveled = 0;
 
         let speedMultiplier = this.foregroundRoadtopDistance / (Math.sqrt(Math.pow(this.foregroundRoadtopDistance,2) + Math.pow(image.centerOffset,2)))
-        if (this.enemies.includes(image)) console.log(speedMultiplier)
+    
 
         let heightPercentTraveled = image.heightTraveled / (this.height-(this.foregroundStart))
         let perspectiveScale = (1+(heightPercentTraveled*(this.maxPerspectiveScale-1)))
@@ -176,7 +207,7 @@ class Game{
         
     }
     draw(ctx){
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         
         this.background.draw(ctx);
@@ -303,7 +334,7 @@ class Player{
         this.ctx = this.game.ctx
         this.block = sprites.block
             this.block.offSetWidth = this.game.width * 0.1;
-            this.block.offSetHeight =  this.game.height * 0.25;
+            this.block.offSetHeight =  this.game.height - this.block.frameData.h * 0.9;
             this.block.frame = 18;
             this.block.frameIncrement = 1;
             this.block.frameQueue = [18];
@@ -316,7 +347,7 @@ class Player{
             this.bounce = 0;
         this.attack = sprites.attack
             this.attack.offSetWidth = this.game.width * 0.3;
-            this.attack.offSetHeight = this.game.height * 0.5;
+            this.attack.offSetHeight = this.game.height - this.attack.frameData.h*0.75
             this.frame = 0;
             this.attack.direction = 'none'
             this.block.inputDelayCounter = 0;
@@ -325,8 +356,7 @@ class Player{
         this.isAttacking = false;
         this.state = {block:false, attack:false}
     }
-    
-    readInput(keyRecord){
+    readKeyboard(keyRecord){
         let newInput;
         if (keyRecord.length === 0) this.input = 'none'
         else if (!keyRecord.includes(this.Input)){
@@ -335,12 +365,23 @@ class Player{
             if (keyRecord.includes('d')) newInput = 'd'
             this.input = newInput;
         }
-        if(keyRecord.includes(" ")) this.attackTransition();
-        
-
+        if(keyRecord.includes(" ")) this.attackTransition()   
     }
-    update(keyRecord){
-        this.readInput(keyRecord)
+    readTouch(touchRecord){
+        if (touchRecord.touchX.length === 0) return;
+        const touchY = touchRecord.touchY
+        const touchX = touchRecord.touchX
+        let newInput = 'none'
+        if (touchX[touchX.length-1] < window.innerWidth/3) newInput = 'a'
+        if (touchX[touchX.length-1] > window.innerWidth*(2/3)) newInput = 'd'
+        if (touchY[touchY.length-2] - touchY[touchY.length-1] > 50) this.attackTransition();
+        this.input = newInput;
+        //* if player swipes up both fingers left and right, that should trigger the middle attack */
+        // so i need to check for two swipe events from two touches.
+    }
+    update(keyRecord, touchRecord){
+        this.readKeyboard(keyRecord)
+        this.readTouch(touchRecord)
         this.updateBounceSway()
         this.isAttacking ? this.updateAttack() : this.updateBlock();
     }
@@ -409,17 +450,19 @@ class Player{
     }
     directAttack(){
         const ctx = this.ctx;
+        let xTranslation = 0;
         ctx.translate(this.game.width/2, this.game.height)
-        ctx.scale(1.2,1)
+        ctx.scale(1.35,1)
         if (this.attackDirection === 'd'){
             ctx.rotate(0.75)
-            ctx.scale(-1.2,1)
+            ctx.scale(-1.35,1)
+            
         } else if (this.attackDirection === 'a') {
             ctx.rotate(-0.75)
-            
         }
-        ctx.translate(-this.game.width/2, -this.game.height)
-        if (this.attackDirection === 'none') ctx.translate(0,this.game.height*0.15)
+        ctx.translate(-this.game.width/2, -this.game.height+300)
+        
+        
     }
     setState(){
         this.state.block = false;
@@ -450,12 +493,12 @@ class Player{
 })();
 
 function startGame(playerSprites,backgroundSprites){ 
-  let game = new Game(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, playerSprites, backgroundSprites)
+  let game = new Game(ctx, canvas.width, canvas.height, playerSprites, backgroundSprites)
   animate(0,game);  
 }
 function animate(timestamp, game){
-    // ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    game.update(timestamp, keyRecord)
+    // ctx.clearRect(0, 0, canvas.width, canvas.height);
+    game.update(timestamp, keyRecord, touchRecord)
     requestAnimationFrame((timestamp)=>{
         animate(timestamp, game)
     })
