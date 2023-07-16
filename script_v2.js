@@ -37,30 +37,23 @@ const ctx = canvas.getContext('2d');
 if (window.innerWidth > window.innerHeight) {
     canvas.style.aspectRatio = "1/0.75"
     canvas.width = 1000;
-    canvas.height = 750;
+    canvas.height = 1000;
 } else {
     canvas.style.aspectRatio = "1/2"
     canvas.width = 1000;
-    canvas.height = 2000;
+    canvas.height = 1750;
 }
 
-canvas.addEventListener("touchstart", handleStart);
-canvas.addEventListener("touchmove", handleMove);
-canvas.addEventListener("touchend", handleEnd);
-// canvas.addEventListener("touchcancel", handleEnd);
+window.addEventListener("touchstart", handleStart);
+window.addEventListener("touchmove", handleMove);
+window.addEventListener("touchend", handleEnd);
+window.addEventListener("touchcancel", handleEnd);
 
 function handleStart(e){
     canvas.removeEventListener("touchstart", handleStart)
     touchRecord.touchY.push([...e.changedTouches][0].pageY)
     touchRecord.touchX.push([...e.changedTouches][0].pageX)
     console.log([...e.changedTouches][0].pageX)
-    
-    if (e.changedTouches.length > 1) return;
-    // const dot = document.createElement('div')
-    // dot.classList.add("dot")
-    // dot.style.top = `${touch.pageY}px`
-    // dot.style.left = `${touch.pageX}px`
-    // document.body.append(dot);
 }
 function handleEnd(e){
     canvas.addEventListener("touchstart", handleStart)    
@@ -163,11 +156,7 @@ class Game{
             this.enemies.unshift(newEnemy)
             this.framesSinceLastEnemy = 0;
         } else this.framesSinceLastEnemy ++;
-        
-        
         this.enemies.forEach((e) => { e.framesAlive++})
-           
-
     }
     updatePerpectiveImages(){
         this.enemies.forEach((e) => this.moveWithPerspective(e))
@@ -232,20 +221,16 @@ class Background{
         this.road = sprites.road
             this.road.offSetWidth = this.game.width/2 - this.road.frameData.w/2
             this.road.offSetHeight = this.game.foregroundStart 
-        
-        
     }
     update(){
         const road = this.road;
         road.frame += 1;
         if (road.frame>road.frames.length-1) road.frame = 0;
         if (this.game.totalFrames % 5 === 1) this.game.castleBg.dy += 1;
-        
     }
  
     draw(ctx){
         const {road, game} = this;
-        
         ctx.save()
         const gradient = ctx.createLinearGradient(0,0,0,200)
         gradient.addColorStop(1,"#b5dae5")
@@ -276,6 +261,8 @@ class GameImage{
     this.alpha = 1
     this.flipped = false;
     this.framesAlive = 0;
+    this.sway = 0;
+    this.bounce = 0;
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -308,12 +295,13 @@ class Sprite extends GameImage{
         this.frame = 0;
         this.sprite = sprite;
         this.frames = sprite.frames
-        this.sway = 0;
-        this.bounce = 0;
+        this.dw = this.sw*this.scale
+        this.dh = this.sh*this.scale
+        
     }
-    get frameData(){
-        return this.frames[this.frame].frame
-    }
+    get frameData() { return this.frames[this.frame].frame }
+        
+    
    
     draw(ctx){
         let frame = this.frameData
