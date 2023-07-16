@@ -13,7 +13,16 @@ window.addEventListener('keyup', (e) => {
 })
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
+pauseMenu.addEventListener('click', (e) => e.preventDefault(), true)
 
+volOn.addEventListener('click', (e) => {
+    volOn.classList.add("disabled");
+    volOff.classList.remove("disabled")
+})
+volOff.addEventListener('click', (e) => {
+    volOff.classList.add("disabled");
+    volOn.classList.remove("disabled")
+})
 
 
 document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
@@ -23,6 +32,15 @@ const canvas = document.getElementById("canvas1");
 const ctx = canvas.getContext('2d');
 const CANVAS_WIDTH = canvas.width = 1000;
 const CANVAS_HEIGHT = canvas.height = 750;
+
+// canvas.addEventListener("touchstart", process_touchstart, false);
+// canvas.addEventListener("touchmove", process_touchmove, false);
+// canvas.addEventListener("touchcancel", process_touchcancel, false);
+// canvas.addEventListener("touchend", process_touchend, false);
+// function process_touchmove(ev) {
+//     // Set call preventDefault()
+//     ev.preventDefault();
+//   }
 
 
 class Game{
@@ -37,8 +55,11 @@ class Game{
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.foregroundStart = 0.3*this.height //first value will need to go up as height value increases, or road will pop off screen 
-        this.maxPerspectiveScale = 3.6*(1-this.foregroundStart/this.height) //3.23  ->  value comes from the perspective built into the road animation
-        this.backgroundSpeed = 1.15 //1.3 pixels/frame -> value comes from speed built into the road animation
+        this.maxPerspectiveScale = 3.5*(1-this.foregroundStart/this.height) //3.23  ->  value comes from the perspective built into the road animation
+        this.backgroundSpeed = 1.2 //1.3 pixels/frame -> value comes from speed built into the road animation
+        this.roadTriangleHeight = 1000  //estimated from image
+        this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
+        
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
         this.background = new Background(this, backgroundSprites)
@@ -82,20 +103,23 @@ class Game{
             this.updatePerpectiveImages()
             this.draw(this.ctx);
         }
+
+        
+
+
     }
     handleBackground(){
         if (this.totalFrames % 24/this.speedModifier === 1) {
-
-            this.trees.unshift(new GameImage("tree.png",0.6,Math.random()*30+275)) 
-            this.trees.unshift(new GameImage("tree.png",0.6,-(Math.random()*30+275))) 
-            
+            this.trees.unshift(new GameImage("tree.png",0.6,300)) 
+            this.trees.unshift(new GameImage("tree.png",0.6,-300)) 
             this.trees[0].alpha = 0;
-            this.trees[1].alpha = 0;
-            
+            this.trees[1].alpha = 0;  
             this.trees = this.trees.filter((e) => e.dh < this.height)
             
         }
         this.trees.forEach((e) => this.moveWithPerspective(e))
+        
+        
     }   
     handleEnemies(){
         if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
@@ -126,12 +150,15 @@ class Game{
     }
     moveWithPerspective(image){
         if (!image.heightTraveled) image.heightTraveled = 0;
+
+        let speedMultiplier = this.foregroundRoadtopDistance / (Math.sqrt(Math.pow(this.foregroundRoadtopDistance,2) + Math.pow(image.centerOffset,2)))
+        if (this.enemies.includes(image)) console.log(speedMultiplier)
+
         let heightPercentTraveled = image.heightTraveled / (this.height-(this.foregroundStart))
         let perspectiveScale = (1+(heightPercentTraveled*(this.maxPerspectiveScale-1)))
-        let speed = Math.pow(perspectiveScale,2) * this.backgroundSpeed
+        let speed = Math.pow(perspectiveScale,2) * (this.backgroundSpeed*speedMultiplier)
         let heightDistributionAdjustment = ((image.sh * image.scale) - (image.dh)) * 0.5
         let widthDistributionAdjustment = ((image.sw * image.scale) - (image.dw)) * (image.centerOffset/(this.width*0.5))
-        //need to start slowing down elements y if their x is moving
         image.heightTraveled += speed
         image.dw =  perspectiveScale * image.sw * image.scale
         image.dh =  perspectiveScale * image.sh * image.scale
@@ -142,6 +169,8 @@ class Game{
             image.fadeAlpha(0.075*this.speedModifier)
         }
         if (image.heightTraveled > this.height - this.foregroundStart - 20) image.fadeAlpha(-0.15)
+        
+
     }
     fireArrow(rightSide){
         
@@ -187,14 +216,11 @@ class Background{
         const {road, game} = this;
         
         ctx.save()
-        // const gradient = ctx.createLinearGradient(0,0,0,200)
-        // gradient.addColorStop(1,"#b5dae5")
-        // gradient.addColorStop(0,"#0072b6")
-        // ctx.fillStyle = gradient;
-        game.castleBg.draw(ctx);
-        console.log(game.castleBg.image.src)
-        
-        //ctx.fillRect(0,0,game.width,game.height)
+        const gradient = ctx.createLinearGradient(0,0,0,200)
+        gradient.addColorStop(1,"#b5dae5")
+        gradient.addColorStop(0,"#0072b6")
+        ctx.fillStyle = gradient;        
+        ctx.fillRect(0,0,game.width,game.height)
         ctx.fillStyle = '#439544'
         ctx.fillRect(0, game.foregroundStart+2, game.width, game.height-game.foregroundStart)
         ctx.restore();

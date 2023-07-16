@@ -1,7 +1,16 @@
 body {
     text-align: center;
 }
-
+body, div
+{
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: -moz-none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+}
 
 canvas, #pauseMenu {
     position: absolute;
@@ -27,16 +36,21 @@ canvas, #pauseMenu {
 }
 
 #pauseMenu.active {
-    display: flex;
+    display: block;
     opacity: 1;
-    justify-content: center;
+    text-align: center;
 }
 
 .blur{
     filter: blur(0.5rem);
 }
 
-img {
+.disabled {
     display: none;
+}
+
+.volume {
+    width: 80px;
+    margin: 0 auto;
 }
 
