@@ -47,7 +47,7 @@ canvas, #pauseMenu {
 }
 
 #pauseMenu.active {
-    display: block;
+    display: inline-block;
     opacity: 1;
     text-align: center;
 }

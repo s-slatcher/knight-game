@@ -1,7 +1,7 @@
 window.addEventListener('load', function(){
 
 const keyRecord = [];
-const touchRecord = {touchX:[], touchY:[]};
+const touchRecord = {touchX:[], touchY:[], multiTouch: false};
 
 
 window.addEventListener('keydown', (e) => {
@@ -16,7 +16,6 @@ window.addEventListener('keyup', (e) => {
 })
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
-pauseMenu.addEventListener('click', (e) => e.preventDefault(), true)
 
 volOn.addEventListener('click', (e) => {
     volOn.classList.add("disabled");
@@ -32,16 +31,18 @@ document.getElementById("fps").addEventListener('change', (e) => (console.log(e.
 
 
 const canvas = document.getElementById("canvas1");
+const pauseMenu = document.getElementById("pauseMenu")
 const ctx = canvas.getContext('2d');
+canvas.width = 1000;
 
 if (window.innerWidth > window.innerHeight) {
-    canvas.style.aspectRatio = "1/0.75"
-    canvas.width = 1000;
+    pauseMenu.style.aspectRatio = canvas.style.aspectRatio = "1/0.75"
     canvas.height = 1000;
+    
 } else {
-    canvas.style.aspectRatio = "1/2"
-    canvas.width = 1000;
+    pauseMenu.style.aspectRatio = canvas.style.aspectRatio = "1/2"
     canvas.height = 1750;
+    
 }
 
 window.addEventListener("touchstart", handleStart);
@@ -50,26 +51,599 @@ window.addEventListener("touchend", handleEnd);
 window.addEventListener("touchcancel", handleEnd);
 
 function handleStart(e){
-    canvas.removeEventListener("touchstart", handleStart)
+    touchRecord.multiTouch = [...e.changedTouches].length > 1 ? true : false;
     touchRecord.touchY.push([...e.changedTouches][0].pageY)
     touchRecord.touchX.push([...e.changedTouches][0].pageX)
     console.log([...e.changedTouches][0].pageX)
 }
 function handleEnd(e){
-    canvas.addEventListener("touchstart", handleStart)    
+    //window.addEventListener("touchstart", handleStart)    
     touchRecord.touchY = [];
     touchRecord.touchX = [];
     
 }
 function handleMove(e){
-    e.preventDefault();
+    touchRecord.multiTouch = [...e.changedTouches].length > 1 ? true : false;
+    //if (touchRecord.multiTouch === true) e.preventDefault();  ** doesnt work, need new solution for pinch zoom
     touchRecord.touchY.push([...e.changedTouches][0].pageY)
     touchRecord.touchX.push([...e.changedTouches][0].pageX)
 }
 
+// (function jsonRewrite(){
+//     let json = {
+//         "frames": [
+//             {
+//                 "filename": "sword-attack-v20002",
+//                 "frame": {
+//                     "x": 1068,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20003",
+//                 "frame": {
+//                     "x": 1602,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20004",
+//                 "frame": {
+//                     "x": 2136,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20005",
+//                 "frame": {
+//                     "x": 2670,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20006",
+//                 "frame": {
+//                     "x": 3204,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20007",
+//                 "frame": {
+//                     "x": 3738,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20008",
+//                 "frame": {
+//                     "x": 4272,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20009",
+//                 "frame": {
+//                     "x": 4806,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20010",
+//                 "frame": {
+//                     "x": 5340,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20011",
+//                 "frame": {
+//                     "x": 5874,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20012",
+//                 "frame": {
+//                     "x": 6408,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20013",
+//                 "frame": {
+//                     "x": 6942,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20014",
+//                 "frame": {
+//                     "x": 7476,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20015",
+//                 "frame": {
+//                     "x": 0,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20016",
+//                 "frame": {
+//                     "x": 534,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20017",
+//                 "frame": {
+//                     "x": 1068,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20018",
+//                 "frame": {
+//                     "x": 1602,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20019",
+//                 "frame": {
+//                     "x": 2136,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20020",
+//                 "frame": {
+//                     "x": 2670,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20021",
+//                 "frame": {
+//                     "x": 3204,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20022",
+//                 "frame": {
+//                     "x": 3738,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20023",
+//                 "frame": {
+//                     "x": 4272,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20024",
+//                 "frame": {
+//                     "x": 4806,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20025",
+//                 "frame": {
+//                     "x": 5340,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20026",
+//                 "frame": {
+//                     "x": 5874,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             },
+//             {
+//                 "filename": "sword-attack-v20027",
+//                 "frame": {
+//                     "x": 6408,
+//                     "y": 871,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "rotated": false,
+//                 "trimmed": false,
+//                 "spriteSourceSize": {
+//                     "x": 0,
+//                     "y": 0,
+//                     "w": 534,
+//                     "h": 871
+//                 },
+//                 "sourceSize": {
+//                     "w": 534,
+//                     "h": 871
+//                 }
+//             }
+//         ],
+//         "meta": {
+//             "app": "Adobe Animate",
+//             "version": "23.0.1.70",
+//             "image": "sword-attack-v2.png",
+//             "format": "RGBA8888",
+//             "size": {
+//                 "w": 8192,
+//                 "h": 4096
+//             },
+//             "scale": "1"
+//         }
+//     }
+//     let frames = json["frames"]
+//     frames.forEach((frame) => {
+        
+//     })
+//     console.log(json)
+// })()
+
+
+
 
 class Game{
     constructor(ctx, width, height, playerSprites, backgroundSprites){
+        console.log(playerSprites.attack)
         this.ctx = ctx;
         this.width = width;
         this.height = height;
@@ -80,8 +654,8 @@ class Game{
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.foregroundStart = this.height - 600//first value will need to go up as height value increases, or road will pop off screen 
-        this.maxPerspectiveScale = 2.7 //3.23  ->  value comes from the perspective built into the road animation
-        this.backgroundSpeed = 1.2 //1.3 pixels/frame -> value comes from speed built into the road animation
+        this.maxPerspectiveScale = 2.7 //value comes from the perspective built into the road animation
+        this.backgroundSpeed = 1.2 //pixels/frame -> value comes from speed built into the road animation
         this.roadTriangleHeight = 1000  //estimated from image
         this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
         this.backgroundSprites = backgroundSprites
@@ -141,7 +715,7 @@ class Game{
             this.trees = this.trees.filter((e) => e.dh < this.height)
             
         }
-        this.trees.forEach((e) => this.moveWithPerspective(e))
+        this.trees.forEach((e) => e.moveWithPerspective(this))
         
         
     }   
@@ -149,7 +723,6 @@ class Game{
         if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
             let randomSign = Math.sign(Math.random()-0.5)
             let newEnemy;
-            
             newEnemy = new GameImage('gaurd_bolt.png',0.25,150*randomSign)
             newEnemy.alpha = 0;
             if (randomSign > 0) newEnemy.flipped = true;
@@ -159,7 +732,7 @@ class Game{
         this.enemies.forEach((e) => { e.framesAlive++})
     }
     updatePerpectiveImages(){
-        this.enemies.forEach((e) => this.moveWithPerspective(e))
+        this.enemies.forEach((e) => e.moveWithPerspective(this))
         this.enemies = this.enemies.filter((e) => e.dh < this.height)
         this.enemies.forEach((e) => {
            if (e.heightTraveled / (this.height-(this.foregroundStart)) > 0.2) {
@@ -168,30 +741,7 @@ class Game{
         })
         
     }
-    moveWithPerspective(image){
-        if (!image.heightTraveled) image.heightTraveled = 0;
-
-        let speedMultiplier = this.foregroundRoadtopDistance / (Math.sqrt(Math.pow(this.foregroundRoadtopDistance,2) + Math.pow(image.centerOffset,2)))
     
-
-        let heightPercentTraveled = image.heightTraveled / (this.height-(this.foregroundStart))
-        let perspectiveScale = (1+(heightPercentTraveled*(this.maxPerspectiveScale-1)))
-        let speed = Math.pow(perspectiveScale,2) * (this.backgroundSpeed*speedMultiplier)
-        let heightDistributionAdjustment = ((image.sh * image.scale) - (image.dh)) * 0.5
-        let widthDistributionAdjustment = ((image.sw * image.scale) - (image.dw)) * (image.centerOffset/(this.width*0.5))
-        image.heightTraveled += speed
-        image.dw =  perspectiveScale * image.sw * image.scale
-        image.dh =  perspectiveScale * image.sh * image.scale
-        image.dy = (this.foregroundStart - image.dh + image.heightTraveled - heightDistributionAdjustment)
-        image.dx = this.width/2 - image.dw/2 + (image.centerOffset * perspectiveScale) - widthDistributionAdjustment
-        
-        if (image.heightTraveled < 100) {
-            image.fadeAlpha(0.075*this.speedModifier)
-        }
-        if (image.heightTraveled > this.height - this.foregroundStart - 20) image.fadeAlpha(-0.15)
-        
-
-    }
     fireArrow(rightSide){
         
     }
@@ -219,14 +769,17 @@ class Background{
     constructor(game, sprites){
         this.game = game;
         this.road = sprites.road
-            this.road.offSetWidth = this.game.width/2 - this.road.frameData.w/2
+            this.road.offSetWidth = this.game.width/2 - this.road.dw/2
             this.road.offSetHeight = this.game.foregroundStart 
+            console.log(this.road.sw)
     }
     update(){
         const road = this.road;
         road.frame += 1;
         if (road.frame>road.frames.length-1) road.frame = 0;
         if (this.game.totalFrames % 5 === 1) this.game.castleBg.dy += 1;
+       
+        road.updateSourceDimensions()
     }
  
     draw(ctx){
@@ -285,33 +838,53 @@ class GameImage{
         if (alpha < 0) alpha = 0;
         this.alpha = alpha;
     }
+    moveWithPerspective({width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed}){
+        if (!this.heightTraveled) this.heightTraveled = 0;
+        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.centerOffset,2)))
+        let heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
+        let perspectiveScale = (1+(heightPercentTraveled*(maxPerspectiveScale-1)))
+        let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
+        let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
+        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.centerOffset/(width*0.5))
+        this.heightTraveled += speed
+        this.dw =  perspectiveScale * this.sw * this.scale
+        this.dh =  perspectiveScale * this.sh * this.scale
+        this.dy = (foregroundStart - this.dh + this.heightTraveled - heightDistributionAdjustment)
+        this.dx = width/2 - this.dw/2 + (this.centerOffset * perspectiveScale) - widthDistributionAdjustment
+        
+        if (this.heightTraveled < 100) {
+            this.fadeAlpha(0.075)
+        }
+        if (this.heightTraveled > height - foregroundStart - 20) this.fadeAlpha(-0.15)
+    }
 }
 
 class Sprite extends GameImage{
-    constructor(sprite){
-        super(sprite.meta.image)
+    constructor(sprite, scale){
+        super(sprite.meta.image, scale)
         this.offSetWidth = 0;
         this.offSetHeight = 0;
         this.frame = 0;
         this.sprite = sprite;
         this.frames = sprite.frames
-        this.dw = this.sw*this.scale
-        this.dh = this.sh*this.scale
+        this.dx = 0;
+        this.dy = 0;
+        this.dw = this.frames[this.frame].frame.w
+        this.dh = this.frames[this.frame].frame.h
         
     }
-    get frameData() { return this.frames[this.frame].frame }
-        
+    updateSourceDimensions(){
+        let frame = this.frames[this.frame].frame 
+        this.sx = frame.x
+        this.sy = frame.y 
+        this.sw = frame.w
+        this.sh = frame.h
+        this.dw = frame.w * this.scale
+        this.dh = frame.h * this.scale
+        this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway       //this will break perspective trick, unless calculated right b
+        this.dy = this.heightTraveled ? this.dx + this.offSetHeight + this.bounce : this.offSetHeight + this.bounce
+    }
     
-   
-    draw(ctx){
-        let frame = this.frameData
-        ctx.save();
-        ctx.globalAlpha = this.alpha
-        ctx.drawImage(
-            this.image, frame.x, frame.y, frame.w, frame.h, 
-            this.offSetWidth + this.sway, this.offSetHeight + this.bounce, frame.w, frame.h)
-        ctx.restore();
-    }
     
 }
 
@@ -321,9 +894,11 @@ class Player{
         this.game = game;
         this.ctx = this.game.ctx
         this.block = sprites.block
-            this.block.offSetWidth = this.game.width * 0.1;
-            this.block.offSetHeight =  this.game.height - this.block.frameData.h * 0.9;
             this.block.frame = 18;
+            this.block.updateSourceDimensions();
+            this.block.offSetWidth = this.game.width * 0.1;
+            this.block.offSetHeight =  this.game.height - this.block.dh* 0.9;
+            
             this.block.frameIncrement = 1;
             this.block.frameQueue = [18];
             this.block.positionInQueue = 0;
@@ -334,9 +909,11 @@ class Player{
             this.sway = 0;
             this.bounce = 0;
         this.attack = sprites.attack
+            this.attack.frame = 0;
+            this.attack.updateSourceDimensions();
             this.attack.offSetWidth = this.game.width * 0.3;
-            this.attack.offSetHeight = this.game.height - this.attack.frameData.h*0.75
-            this.frame = 0;
+            this.attack.offSetHeight = this.game.height - this.attack.dh*0.75
+            
             this.attack.direction = 'none'
             this.block.inputDelayCounter = 0;
         this.input = 'none'
@@ -362,6 +939,7 @@ class Player{
         let newInput = 'none'
         if (touchX[touchX.length-1] < window.innerWidth/3) newInput = 'a'
         if (touchX[touchX.length-1] > window.innerWidth*(2/3)) newInput = 'd'
+        if (touchRecord.multiTouch) newInput = 'none';
         if (touchY[touchY.length-2] - touchY[touchY.length-1] > 50) this.attackTransition();
         this.input = newInput;
         //* if player swipes up both fingers left and right, that should trigger the middle attack */
@@ -380,8 +958,10 @@ class Player{
             this.attack.draw(this.ctx)
             this.ctx.restore();
             this.block.fadeAlpha(-0.2)
-        } else this.block.fadeAlpha(0.2);
-        
+        } else {
+            this.block.fadeAlpha(0.2);
+            this.attack.alpha = 0;
+        }
         this.block.draw(this.ctx);
         
     }
@@ -393,14 +973,15 @@ class Player{
         const attack = this.attack
         if (attack.frame === 0) this.attackDirection = this.input;
         attack.frame++;
-
+        if (attack.frame < 10) attack.fadeAlpha(0.2)
+        if(attack.frame > 20) attack.fadeAlpha(-0.2)
         if (attack.frame === attack.frames.length) {
             attack.frame = 0; 
             this.isAttacking = false;
         }
-        };
-            
-    
+
+        attack.updateSourceDimensions()
+    };
     updateBlock(){
         const block = this.block;
         if (--block.inputDelayCounter >= 0) this.input = block.oldInput
@@ -410,20 +991,21 @@ class Player{
         }
         block.oldInput = this.input;
         if (block.positionInQueue !== block.frameQueue.length) block.frame = block.frameQueue[block.positionInQueue++]
+        block.updateSourceDimensions()
     }
-    makeFrameQueue(block, newInput){
-        block.frameQueue = [];
-        block.positionInQueue = 0;
-        let frameEnd = block.frameDestinations[newInput]; 
-        let increment = Math.sign(frameEnd-block.frame)
-        if (Object.values(block.frameDestinations).includes(block.frame)) {
-            block.frame += block.earlyFramesToSkip * increment
+    makeFrameQueue(sprite, newInput){
+        sprite.frameQueue = [];
+        sprite.positionInQueue = 0;
+        let frameEnd = sprite.frameDestinations[newInput]; 
+        let increment = Math.sign(frameEnd-sprite.frame)
+        if (Object.values(sprite.frameDestinations).includes(sprite.frame)) {
+            sprite.frame += sprite.earlyFramesToSkip * increment
         }
-        for (let i = block.frame + increment; i !== frameEnd + increment; i += increment){
-            block.frameQueue.push(i)
+        for (let i = sprite.frame + increment; i !== frameEnd + increment; i += increment){
+            sprite.frameQueue.push(i)
         }
-        if(Math.abs(block.frame - frameEnd) > block.frames.length/2) {
-            block.frameQueue = block.frameQueue.filter((e) => e < block.middleSkipRange[0] || e > block.middleSkipRange[1])
+        if(Math.abs(sprite.frame - frameEnd) > sprite.frames.length/2) {
+            sprite.frameQueue = sprite.frameQueue.filter((e) => e < sprite.middleSkipRange[0] || e > sprite.middleSkipRange[1])
         }
         
     }
@@ -470,13 +1052,13 @@ class Player{
     let playerSprites = {}
     let backgroundSprites = {}
     const [atkRep, blockRep, roadRep] = await Promise.all([
-        fetch("./sword-attack-v2.json"),
+        fetch("./sword-attack-v2-compressed.json"),
         fetch("./sword48.json"),
         fetch("./road_background_v3.json"),
         fetch ("./gaurd_bolt.png")])
-    await atkRep.json().then((sprite) => playerSprites.attack = new Sprite(sprite));
-    await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite));
-    await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite));
+    await atkRep.json().then((sprite) => playerSprites.attack = new Sprite(sprite, 2));
+    await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite, 1));
+    await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite, 1));
     startGame(playerSprites,backgroundSprites);
 })();
 

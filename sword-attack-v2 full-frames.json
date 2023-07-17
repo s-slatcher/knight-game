@@ -1,6 +1,22 @@
 ﻿{"frames": [
 
 {
+	"filename": "sword-attack-v20000",
+	"frame": {"x":0,"y":0,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20001",
+	"frame": {"x":534,"y":0,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
 	"filename": "sword-attack-v20002",
 	"frame": {"x":1068,"y":0,"w":534,"h":871},
 	"rotated": false,
@@ -208,10 +224,88 @@
 	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
 	"sourceSize": {"w":534,"h":871}
 }
-
-
-
-],
+,{
+	"filename": "sword-attack-v20028",
+	"frame": {"x":6942,"y":871,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20029",
+	"frame": {"x":7476,"y":871,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20030",
+	"frame": {"x":0,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20031",
+	"frame": {"x":534,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20032",
+	"frame": {"x":1068,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20033",
+	"frame": {"x":1602,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20034",
+	"frame": {"x":2136,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20035",
+	"frame": {"x":2670,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+}
+,{
+	"filename": "sword-attack-v20035 --- fake empty frame added", 
+	"frame": {"x":3204,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+	
+}
+,{
+	"filename": "sword-attack-v20035 --- fake empty frame added", 
+	"frame": {"x":3204,"y":1742,"w":534,"h":871},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":534,"h":871},
+	"sourceSize": {"w":534,"h":871}
+	
+}],
 "meta": {
 	"app": "Adobe Animate",
 	"version": "23.0.1.70",
