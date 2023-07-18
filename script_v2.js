@@ -1,10 +1,31 @@
 window.addEventListener('load', function(){
 
-setTimeout(()=>window.scrollTo(0,500), 100)
-    
 
+const canvas = document.getElementById("canvas1");
+const pauseMenu = document.getElementById("pauseMenu")
+const canvasContainer = document.getElementById("canvas-container")
+const resumeButton = document.getElementById("resume-btn")
+const startButton = document.getElementById("start-btn")
+const ctx = canvas.getContext('2d');
 const keyRecord = [];
 const touchRecord = {touchX:[], touchY:[], multiTouch: false};
+canvas.width = 1000;
+canvas.height = 1000;
+canvas.style.aspectRatio = 1/1
+
+
+
+startButton.addEventListener('click',() => {
+    fetchSprites();
+    canvas.requestFullscreen();
+    startButton.classList.add("disabled")
+})
+
+resumeButton.addEventListener('click', () => {
+    canvas.requestFullscreen();
+    resumeButton.classList.add("disabled")
+
+})
 
 
 window.addEventListener('keydown', (e) => {
@@ -33,12 +54,7 @@ volOff.addEventListener('click', (e) => {
 document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
 
 
-const canvas = document.getElementById("canvas1");
-const pauseMenu = document.getElementById("pauseMenu")
-const ctx = canvas.getContext('2d');
-canvas.width = 1000;
-canvas.height = 1000;
-canvas.style.aspectRatio = 1/1
+
 
 window.addEventListener("touchstart", handleStart);
 window.addEventListener("touchmove", handleMove);
@@ -665,7 +681,13 @@ class Game{
         
     }
     update(timestamp, keyRecord, touchRecord){
-        
+        if (!document.fullscreenElement) {
+            //this.pause()
+            const resume = document.getElementById("resume-btn")
+            resume.classList.remove("disabled")
+            
+            return
+        }
         this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
 
@@ -935,7 +957,7 @@ class Player{
         if (touchX[touchX.length-1] < window.innerWidth/3) newInput = 'a'
         if (touchX[touchX.length-1] > window.innerWidth*(2/3)) newInput = 'd'
         if (touchRecord.multiTouch) newInput = 'none';
-        if (touchY[touchY.length-2] - touchY[touchY.length-1] > 50) this.attackTransition();
+        if (touchY[touchY.length-2] - touchY[touchY.length-1] > 15) this.attackTransition();
         this.input = newInput;
         //* if player swipes up both fingers left and right, that should trigger the middle attack */
         // so i need to check for two swipe events from two touches.
@@ -1043,7 +1065,7 @@ class Player{
 }
 
 
-(async function fetchSprites(){
+async function fetchSprites(){
     let playerSprites = {}
     let backgroundSprites = {}
     const [atkRep, blockRep, roadRep] = await Promise.all([
@@ -1055,7 +1077,7 @@ class Player{
     await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite, 1));
     await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite, 1));
     startGame(playerSprites,backgroundSprites);
-})();
+};
 
 function startGame(playerSprites,backgroundSprites){ 
   let game = new Game(ctx, canvas.width, canvas.height, playerSprites, backgroundSprites)

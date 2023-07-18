@@ -1,10 +1,10 @@
-html {
-    margin: 0;
-}
+
 body {
     text-align: center;
     margin: 0;
-    
+    background-color: black;
+    font-family: 'Lugrasimo', cursive;
+    text-align: center;
 }
 body, div
 {
@@ -17,12 +17,24 @@ body, div
     user-select: none;
 }
 
+#start-btn, #resume-btn {
+    color: rgb(226, 226, 213);
+    background-color: black;
+    width: 100%;
+    text-align: center;
+    font-size: 2.75rem; 
+    position: absolute;
+    top: 50%;
+    left: 50%; 
+    transform: translate(-50%,-50%);
+}
+   
+    
+
 #canvas-container{
-    touch-action: none;
+    /* touch-action: none; */
     display: flex;
     height: 100vh;
-    
-    margin-top: 500px;
     justify-content: space-around;
 }
 
@@ -55,8 +67,6 @@ input, label {
 #pauseMenu {
    display: none;
    opacity: 0;
-   
-   font-family: 'Lugrasimo', cursive;
    background-color: rgba(0, 0, 0, 0.6); 
    transition: opacity 50ms;
 }
