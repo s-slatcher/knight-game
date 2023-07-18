@@ -1,5 +1,8 @@
 window.addEventListener('load', function(){
 
+setTimeout(()=>window.scrollTo(0,500), 100)
+    
+
 const keyRecord = [];
 const touchRecord = {touchX:[], touchY:[], multiTouch: false};
 
@@ -34,16 +37,8 @@ const canvas = document.getElementById("canvas1");
 const pauseMenu = document.getElementById("pauseMenu")
 const ctx = canvas.getContext('2d');
 canvas.width = 1000;
-
-if (window.innerWidth > window.innerHeight) {
-    pauseMenu.style.aspectRatio = canvas.style.aspectRatio = "1/0.75"
-    canvas.height = 1000;
-    
-} else {
-    pauseMenu.style.aspectRatio = canvas.style.aspectRatio = "1/2"
-    canvas.height = 1750;
-    
-}
+canvas.height = 1000;
+canvas.style.aspectRatio = 1/1
 
 window.addEventListener("touchstart", handleStart);
 window.addEventListener("touchmove", handleMove);
