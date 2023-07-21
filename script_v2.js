@@ -41,14 +41,7 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
 
-volOn.addEventListener('click', (e) => {
-    volOn.classList.add("disabled");
-    volOff.classList.remove("disabled")
-})
-volOff.addEventListener('click', (e) => {
-    volOff.classList.add("disabled");
-    volOn.classList.remove("disabled")
-})
+
 
 
 document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
@@ -650,6 +643,13 @@ function handleMove(e){
 // })()
 
 
+class Input{
+    constructor(keyRecord, touchRecord){
+        this.keys = keyRecord
+        this.touchs = touchRecord
+    }
+}
+
 
 
 class Game{
@@ -676,57 +676,32 @@ class Game{
         this.projectiles = [];
         this.trees = [];
         this.fpsSlider = document.getElementById("fps")
-        this.castleBg = new GameImage('castle_bg.jpg',1.2,-300)
+        this.castleBg = new GameImage('./castle_bg.jpg',1.2,-300)
         this.castleBg.dy = -700
         
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
-            //this.pause()
             const resume = document.getElementById("resume-btn")
             resume.classList.remove("disabled")
-            
             return
         }
         this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
-
-        if (keyRecord.includes('Escape') && !this.isPaused) {
-            keyRecord.splice(keyRecord.indexOf('Escape'),1)
-            this.isPaused = true
-            canvas.classList.add('blur')
-            pauseMenu.classList.add('active')
-            return;
-        }
-        if (this.isPaused) {
-            if (keyRecord.includes('Escape')) {
-                this.isPaused = false;
-                canvas.classList.remove('blur')
-                pauseMenu.classList.remove('active')
-                keyRecord.splice(keyRecord.indexOf('Escape'),1)
-            }
-            return;
-        }
         for (let i = 0; i < framesDue; i++) {
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
             this.player.update(keyRecord, touchRecord)
             this.background.update()
-        
-            //if (Math.random()*20 < 1) this.testRocks.push(new GameImage('rock.png',Math.random()*0.2+0.2,(Math.random()-0.5)*800))
             this.updatePerpectiveImages()
             this.draw(this.ctx);
         }
-
-        
-
-
     }
     handleBackground(){
         if (this.totalFrames % 24/this.speedModifier === 1) {
-            this.trees.unshift(new GameImage("tree.png",0.6,300)) 
-            this.trees.unshift(new GameImage("tree.png",0.6,-300)) 
+            this.trees.unshift(new GameImage("./tree.png",0.6,300)) 
+            this.trees.unshift(new GameImage("./tree.png",0.6,-300)) 
             this.trees[0].alpha = 0;
             this.trees[1].alpha = 0;  
             this.trees = this.trees.filter((e) => e.dh < this.height)
@@ -740,7 +715,7 @@ class Game{
         if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
             let randomSign = Math.sign(Math.random()-0.5)
             let newEnemy;
-            newEnemy = new GameImage('gaurd_bolt.png',0.25,150*randomSign)
+            newEnemy = new GameImage('./gaurd_bolt.png',0.25,150*randomSign)
             newEnemy.alpha = 0;
             if (randomSign > 0) newEnemy.flipped = true;
             this.enemies.unshift(newEnemy)
@@ -782,6 +757,51 @@ class Game{
     }
 }
 
+class Enemy{
+    constructor(enemyType, scale, centerOffset, baseImageSrc, 
+                attackImageSrc, killedImageSrc, attackRange){
+        this.enemyType = enemyType
+        this.gameImage = new GameImage(baseImageSrc,scale,centerOffset)
+        this.killed = false;
+        this.hasAttacked = false;
+        this.inAttackRange = false;
+        this.attackImageSrc = attackImageSrc
+        this.killedImageSrc = killedImageSrc
+        this.attackRange = attackRange        
+    }
+    update(){
+            if (this.heightPercentTraveled > this.attackRange) this.attackPlayer();
+            if (this.heightPercentTraveled > 0.6) this.recieveAttack();
+        }
+    attackPlayer(){
+        if (!this.hasAttacked && !this.killed) {
+            this.gameImage.image.src = this.attackImageSrc
+            this.hasAttacked = true;
+        }
+    }
+    recieveAttack(){
+        if (this.inAttackRange) {
+            this.killed = true;
+            this.gameImage.image.src = this.killed.imageSrc
+    }
+    }
+}
+
+class Crossbowman extends Enemy {
+    constructor(centerOffset){
+        super('crossbowman', 0.25, centerOffset, './gaurd_bolt.png',
+            './gaurd_nobolt.png', './gaurd_dead.png')
+    }
+}
+
+class Pikeman extends Enemy {
+    constructor(centerOffset){
+        //super()
+    }
+}
+
+
+
 class Background{
     constructor(game, sprites){
         this.game = game;
@@ -815,10 +835,10 @@ class Background{
     }
 }
 class GameImage{
-    constructor(fileName, initScale = 1, centerOffset = 0){
+    constructor(fileSrc, initScale = 1, centerOffset = 0){
     this.scale = initScale
     this.image = new Image()
-    this.image.src = `./${fileName}`
+    this.image.src = fileSrc
     this.sw = this.image.width;
     this.sh = this.image.height
     this.sx = 0
@@ -828,6 +848,7 @@ class GameImage{
     this.dw = this.sw*this.scale
     this.dh = this.sh*this.scale
     this.centerOffset = centerOffset
+    this.heightTraveled = 0;
     this.alpha = 1
     this.flipped = false;
     this.framesAlive = 0;
@@ -856,10 +877,9 @@ class GameImage{
         this.alpha = alpha;
     }
     moveWithPerspective({width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed}){
-        if (!this.heightTraveled) this.heightTraveled = 0;
+        this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
         let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.centerOffset,2)))
-        let heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
-        let perspectiveScale = (1+(heightPercentTraveled*(maxPerspectiveScale-1)))
+        let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
         let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
         let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
         let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.centerOffset/(width*0.5))
@@ -878,7 +898,7 @@ class GameImage{
 
 class Sprite extends GameImage{
     constructor(sprite, scale){
-        super(sprite.meta.image, scale)
+        super(`./${sprite.meta.image}`, scale)
         this.offSetWidth = 0;
         this.offSetHeight = 0;
         this.frame = 0;
@@ -1071,8 +1091,7 @@ async function fetchSprites(){
     const [atkRep, blockRep, roadRep] = await Promise.all([
         fetch("./sword-attack-v2-compressed.json"),
         fetch("./sword48.json"),
-        fetch("./road_background_v3.json"),
-        fetch ("./gaurd_bolt.png")])
+        fetch("./road_background_v3.json")])
     await atkRep.json().then((sprite) => playerSprites.attack = new Sprite(sprite, 2));
     await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite, 1));
     await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite, 1));
