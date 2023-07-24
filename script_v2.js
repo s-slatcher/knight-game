@@ -8,7 +8,7 @@ const resumeButton = document.getElementById("resume-btn")
 const startButton = document.getElementById("start-btn")
 const ctx = canvas.getContext('2d');
 const keyRecord = [];
-const touchRecord = {touchX:[], touchY:[], multiTouch: false};
+const touchRecord = {};
 canvas.width = 1000;
 canvas.height = 1000;
 canvas.style.aspectRatio = 1/1
@@ -41,37 +41,34 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
 
-
-
-
 document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
 
 
+document.addEventListener("touchstart", e => {
+    [...e.touches].forEach((touch) => {
+        let id = touch.identifier
+        if (touch.identifier > 1) id = touch.identifier % 2
+        touchRecord[`touch${id}`] = {
+            x: [touch.pageX],
+            y: [touch.pageY]
+        }
+        
+    })
+})
 
+document.addEventListener("touchmove", e => {
+    [...e.changedTouches].forEach(touch => {
+        const id = touch.identifier 
+        touchRecord[`touch${id}`].x.push(touch.pageX) 
+        touchRecord[`touch${id}`].y.push(touch.pageY)  
+        })
+    })
 
-window.addEventListener("touchstart", handleStart);
-window.addEventListener("touchmove", handleMove);
-window.addEventListener("touchend", handleEnd);
-window.addEventListener("touchcancel", handleEnd);
-
-function handleStart(e){
-    touchRecord.multiTouch = [...e.changedTouches].length > 1 ? true : false;
-    touchRecord.touchY.push([...e.changedTouches][0].pageY)
-    touchRecord.touchX.push([...e.changedTouches][0].pageX)
-    console.log([...e.changedTouches][0].pageX)
-}
-function handleEnd(e){
-    //window.addEventListener("touchstart", handleStart)    
-    touchRecord.touchY = [];
-    touchRecord.touchX = [];
-    
-}
-function handleMove(e){
-    touchRecord.multiTouch = [...e.changedTouches].length > 1 ? true : false;
-    //if (touchRecord.multiTouch === true) e.preventDefault();  ** doesnt work, need new solution for pinch zoom
-    touchRecord.touchY.push([...e.changedTouches][0].pageY)
-    touchRecord.touchX.push([...e.changedTouches][0].pageX)
-}
+document.addEventListener("touchend", e => {
+    let id = [...e.changedTouches][0].identifier
+    delete touchRecord[`touch${id}`]
+    console.log("end")
+})
 
 
 
@@ -328,7 +325,7 @@ class GameImage{
         
             
         
-        console.log(this.horizonOffset)
+        
         this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
         let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.horizonOffset,2)))
         let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
@@ -450,15 +447,17 @@ class Player{
         if(keyRecord.includes(" ")) this.attackTransition()   
     }
     readTouch(touchRecord){
-        if (touchRecord.touchX.length === 0) return;
-        const touchY = touchRecord.touchY
-        const touchX = touchRecord.touchX
+        if (Object.keys(touchRecord).length === 0) return;
+        const mainTouch = touchRecord.touch0 ? touchRecord.touch0 : touchRecord.touch1;
+        console.log(mainTouch)
+        const touchX = mainTouch.x[mainTouch.x.length-1]
         let newInput = 'none'
-        if (touchX[touchX.length-1] < window.innerWidth/3) newInput = 'a'
-        if (touchX[touchX.length-1] > window.innerWidth*(2/3)) newInput = 'd'
-        if (touchRecord.multiTouch) newInput = 'none';
-        if (touchY[touchY.length-2] - touchY[touchY.length-1] > 15) this.attackTransition();
-        this.input = newInput;
+        if (touchX < window.innerWidth/3) newInput = 'a'
+        if (touchX > window.innerWidth*(2/3)) newInput = 'd'
+        if (touchRecord.touch0 && touchRecord.touch1) newInput = 'none'
+        this.input = newInput
+        // if (touchY[touchY.length-2] - touchY[touchY.length-1] > 15) this.attackTransition();
+        // this.input = newInput;
         //* if player swipes up both fingers left and right, that should trigger the middle attack */
         // so i need to check for two swipe events from two touches.
     }
