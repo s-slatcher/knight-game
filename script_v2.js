@@ -99,20 +99,24 @@ class Game{
         this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
-        this.background = new Background(this, backgroundSprites)
+        //this.background = new Background(this, backgroundSprites)
+        this.road = backgroundSprites.road
+        this.road.offSetWidth = this.width/2 - this.road.dw/2
+        this.road.offSetHeight = this.foregroundStart
         this.enemies = [];
         this.projectiles = [];
-        this.trees = [];
+        this.scrollingElements = [];
         this.fpsSlider = document.getElementById("fps")
         this.healthBar
         
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
-            const resume = document.getElementById("resume-btn")
-            resume.classList.remove("disabled")
+            document.getElementById("resume-btn").classList.remove("disabled")
             return
         }
+        
+        
         //this.fps = this.fpsSlider.value
         let framesDue = this.getFramesDue(timestamp)
         for (let i = 0; i < framesDue; i++) {
@@ -120,24 +124,21 @@ class Game{
             this.handleEnemies();
             this.handleBackground();
             this.player.update(keyRecord, touchRecord)
-            this.background.update()
-            this.updatePerpectiveImages()
+            this.updatePerpective()
             this.draw(this.ctx);
         }
     }
     handleBackground(){
+        this.road.update()
         if (this.totalFrames % 24/this.speedModifier === 1) {
             let centerX = this.width/2
-            this.trees.unshift(new GameImage("./images/tree.png",0.6,centerX + 300)) 
-            this.trees.unshift(new GameImage("./images/tree.png",0.6,centerX - 300)) 
-            this.trees[0].alpha = 0;
-            this.trees[1].alpha = 0;  
-            this.trees = this.trees.filter((e) => e.dh < this.height)
-            
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",0.6,centerX + 300)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",0.6,centerX - 300)) 
+            this.scrollingElements[0].alpha = 0;
+            this.scrollingElements[1].alpha = 0;    
         }
-        this.trees.forEach((e) => e.moveWithPerspective(this))
-    
-    }   
+        
+    }
     handleEnemies(){
         let center = this.width/2
         if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
@@ -150,14 +151,16 @@ class Game{
             this.framesSinceLastEnemy = 0;
 
         } else this.framesSinceLastEnemy ++;
-        let arrowLoadedEnemies = this.enemies.filter((e) => e.enemyType === 'crossbowman' && !e.hasAttacked)
+        let arrowLoadedEnemies = this.enemies.filter((e) => e instanceof Crossbowman && !e.hasAttacked)
         this.enemies.forEach((e)=> e.update());
         arrowLoadedEnemies.forEach((e) => {
             if (e.hasAttacked === true){
                 let velocityDirection = Math.sign(e.image.dx - center)
                 let arrowDestinationX = e.image.dx + e.image.dw/2
                 let newArrow = new BlockedArrow(arrowDestinationX,this.height-350, 30, Math.random()*12*velocityDirection)
-                this.projectiles.push(newArrow) 
+                this.projectiles.push(newArrow)
+                
+            
             }
         
         })
@@ -169,19 +172,35 @@ class Game{
     updateUI() {
 
     }
-    updatePerpectiveImages(){
+    updatePerpective(){
         this.enemies.forEach((e) => e.image.moveWithPerspective(this))
-        this.enemies = this.enemies.filter((e) => e.image.dh < this.height)
+        this.scrollingElements.forEach((e) => e.moveWithPerspective(this))
+        this.enemies = this.enemies.filter((e) => e.image.heightTraveled < this.height-100)
+        this.scrollingElements = this.scrollingElements.filter((e) => {
+            return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
+        })
+        
         
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        this.background.draw(ctx);
-        this.trees.forEach((e) => e.draw(ctx))
+        this.drawStaticBackground(ctx);
+        this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.image.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
         this.player.draw();
-        
+    }
+    drawStaticBackground(ctx){
+        ctx.save()
+        const gradient = ctx.createLinearGradient(0,0,0,200)
+        gradient.addColorStop(1,"#b5dae5")
+        gradient.addColorStop(0,"#0072b6")
+        ctx.fillStyle = gradient;        
+        ctx.fillRect(0,0,this.width,this.height)
+        ctx.fillStyle = '#439544'
+        ctx.fillRect(0, this.foregroundStart+2, this.width, this.height-this.foregroundStart)
+        ctx.restore();
+        this.road.draw(ctx);
     }
     getFramesDue(timestamp){
         let frameTime = timestamp - this.lastTimeStamp;
@@ -194,45 +213,38 @@ class Game{
 }
 
 class Enemy{
-    constructor(enemyType, scale, posX, baseImageSrc, 
-                attackImageSrc, killedImageSrc, attackRange){
-        this.enemyType = enemyType
+    constructor(baseImageSrc, scale, posX){
         this.image = new GameImage(baseImageSrc,scale,posX, 0)
         this.killed = false;
         this.hasAttacked = false;
-        this.inAttackRange = false;
-        this.attackImageSrc = attackImageSrc
-        this.killedImageSrc = killedImageSrc
-        this.attackRange = attackRange        
+        this.inAttackRange = false;    
+    }
+}
+
+class Crossbowman extends Enemy {
+    constructor(posX){
+        super('./images/gaurd_bolt.png', 0.25, posX)
     }
     update(){
-            if (this.image.heightPercentTraveled > this.attackRange) this.attackPlayer();
-            if (this.image.heightPercentTraveled > 0.5) {
-                this.inAttackRange = true;
-                this.recieveAttack();
-            }
+        if (this.image.heightPercentTraveled > 0.2 ) this.attackPlayer();
+        if (this.image.heightPercentTraveled > 0.5) {
+            this.inAttackRange = true;
+            this.recieveAttack();
         }
+    }
     attackPlayer(){
         if (!this.hasAttacked && !this.killed) {
-            this.image.image.src = this.attackImageSrc
+            this.image.image.src = './images/gaurd_nobolt.png'
             this.hasAttacked = true;
         }
     }
     recieveAttack(){
         if (this.inAttackRange) {
             this.killed = true;
-            this.image.image.src = this.killedImageSrc
-    }
+            this.image.image.src = './images/gaurd_dead_nocrossbow.png'
+        }
     }
 }
-
-class Crossbowman extends Enemy {
-    constructor(posX){
-        super('crossbowman', 0.25, posX, './images/gaurd_bolt.png',
-            './images/gaurd_nobolt.png', './images/gaurd_dead_nocrossbow.png', 0.2)
-    }
-
-}   
 
 class Pikeman extends Enemy {
     constructor(posX){
@@ -240,39 +252,6 @@ class Pikeman extends Enemy {
     }
 }
 
-
-
-class Background{
-    constructor(game, sprites){
-        this.game = game;
-        this.road = sprites.road
-            this.road.offSetWidth = this.game.width/2 - this.road.dw/2
-            this.road.offSetHeight = this.game.foregroundStart 
-    }
-    update(){
-        const road = this.road;
-        road.frame += 1;
-        if (road.frame>road.frames.length-1) road.frame = 0;
-        
-       
-        road.updateSourceDimensions()
-    }
- 
-    draw(ctx){
-        const {road, game} = this;
-        ctx.save()
-        const gradient = ctx.createLinearGradient(0,0,0,200)
-        gradient.addColorStop(1,"#b5dae5")
-        gradient.addColorStop(0,"#0072b6")
-        ctx.fillStyle = gradient;        
-        ctx.fillRect(0,0,game.width,game.height)
-        ctx.fillStyle = '#439544'
-        ctx.fillRect(0, game.foregroundStart+2, game.width, game.height-game.foregroundStart)
-        ctx.restore();
-        road.draw(ctx);
-        
-    }
-}
 class GameImage{
     constructor(fileSrc, initScale = 1, posX = 0, posY = 0){
     this.scale = initScale
@@ -290,19 +269,41 @@ class GameImage{
     this.horizonOffset = this.dx - 1000/2
     this.angle = 0
     this.alpha = 1
+    this.shadowAlpha = 0;
     this.flipped = false;
-    this.framesAlive = 0;
     this.sway = 0;
     this.bounce = 0;
     }
+    
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
         ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);    
         if (this.angle !== 0) this.rotate(ctx)
+        ctx.beginPath();
+        this.drawShadow(ctx)
         ctx.globalAlpha = this.alpha
         ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
         ctx.restore();
+    }
+    drawShadow(ctx){
+        if (this.heightTraveled < 20) return;
+        const centerX = this.dx + this.dw/2 
+        const centerY = this.dy + this.dh*0.9
+        ctx.beginPath()
+        ctx.arc(centerX,centerY,this.dw,0,2*Math.PI);
+        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/4, centerX, centerY, this.dw/1.75)
+        gradient.addColorStop(0, "rgba(0,0,0,0.5)")
+        gradient.addColorStop(1, "rgba(0,0,0,0)")
+        ctx.fillStyle = gradient
+        ctx.save()
+        ctx.translate(centerX, centerY)
+        ctx.scale(1,0.5)
+        this.fadeShadowAlpha(0.05)
+        ctx.globalAlpha = this.shadowAlpha
+        ctx.translate(-centerX, -centerY)
+        ctx.fill();
+        ctx.restore()
     }
     rotate(ctx){
         ctx.translate(this.dx+(this.dw/2),this.dy+(this.dh/2))
@@ -321,11 +322,15 @@ class GameImage{
         if (alpha < 0) alpha = 0;
         this.alpha = alpha;
     }
-    moveWithPerspective({width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed}){
-        
-            
-        
-        
+    fadeShadowAlpha(increment){
+        if (increment === 0) return;
+        let alpha = this.shadowAlpha + increment
+        if (alpha > 1) alpha = 1;
+        if (alpha < 0) alpha = 0;
+        this.shadowAlpha = alpha;
+    }
+    moveWithPerspective(game){
+        const {width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed} = game;
         this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
         let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.horizonOffset,2)))
         let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
@@ -357,6 +362,11 @@ class Sprite extends GameImage{
         this.dh = this.frames[this.frame].frame.h
         
     }
+    update(){
+        this.frame += 1;
+        if (this.frame>this.frames.length-1) this.frame = 0;
+        this.updateSourceDimensions()
+    }
     updateSourceDimensions(){
         let frame = this.frames[this.frame].frame 
         this.sx = frame.x
@@ -365,7 +375,7 @@ class Sprite extends GameImage{
         this.sh = frame.h
         this.dw = frame.w * this.scale
         this.dh = frame.h * this.scale
-        this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway       //this will break perspective trick, unless calculated right b
+        this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway 
         this.dy = this.heightTraveled ? this.dx + this.offSetHeight + this.bounce : this.offSetHeight + this.bounce
     }
 }
@@ -388,15 +398,19 @@ class Projectile extends GameImage {
         this.dy -= this.velY
         this.velY -= this.gravity
         this.angle += this.rotationSpeed*Math.PI*2
-        
-        
     }
 }
 
 class BlockedArrow extends Projectile {
     constructor(posX,posY,velTotal,velX){
         super('./images/arrow.png',
-            0.5, posX, posY, velTotal, velX, 3.14*Math.sign(velX), Math.random()*0.04+0.02)
+            0.5, posX, posY, velTotal, velX, 3.14*Math.sign(velX), (Math.random()*0.04+0.02)*Math.sign(velX))
+    }
+}
+
+class BloodSpurt extends Projectile {
+    constructor(posX,posY,intensity=1){
+        super ('./')
     }
 }
 
@@ -448,18 +462,17 @@ class Player{
     }
     readTouch(touchRecord){
         if (Object.keys(touchRecord).length === 0) return;
-        const mainTouch = touchRecord.touch0 ? touchRecord.touch0 : touchRecord.touch1;
-        console.log(mainTouch)
-        const touchX = mainTouch.x[mainTouch.x.length-1]
+        const touch0 = touchRecord.touch0
+        const touch1 = touchRecord.touch1
+        const lastTouch = touch1 || touch0
+        const lastTouchX = lastTouch.x[lastTouch.x.length-1]
         let newInput = 'none'
-        if (touchX < window.innerWidth/3) newInput = 'a'
-        if (touchX > window.innerWidth*(2/3)) newInput = 'd'
+        if (lastTouchX < window.innerWidth/3) newInput = 'a'
+        if (lastTouchX > window.innerWidth*(2/3)) newInput = 'd'
         if (touchRecord.touch0 && touchRecord.touch1) newInput = 'none'
         this.input = newInput
-        // if (touchY[touchY.length-2] - touchY[touchY.length-1] > 15) this.attackTransition();
-        // this.input = newInput;
-        //* if player swipes up both fingers left and right, that should trigger the middle attack */
-        // so i need to check for two swipe events from two touches.
+        if (touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) this.attackTransition();
+        else if (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)  this.attackTransition();
     }
     update(keyRecord, touchRecord){
         this.readKeyboard(keyRecord)
