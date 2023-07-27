@@ -159,8 +159,7 @@ class Game{
                 let arrowDestinationX = e.image.dx + e.image.dw/2
                 let newArrow = new BlockedArrow(arrowDestinationX,this.height-350, 30, Math.random()*12*velocityDirection)
                 this.projectiles.push(newArrow)
-                
-            
+                //this.player.counter = 0;
             }
         
         })
@@ -186,7 +185,7 @@ class Game{
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.drawStaticBackground(ctx);
         this.scrollingElements.forEach((e) => e.draw(ctx))
-        this.enemies.forEach((e) => e.image.draw(ctx))
+        this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
         this.player.draw();
     }
@@ -217,13 +216,16 @@ class Enemy{
         this.image = new GameImage(baseImageSrc,scale,posX, 0)
         this.killed = false;
         this.hasAttacked = false;
-        this.inAttackRange = false;    
+        this.inAttackRange = false;   
     }
+    
 }
 
 class Crossbowman extends Enemy {
     constructor(posX){
         super('./images/gaurd_bolt.png', 0.25, posX)
+        this.bloodSpurts = [];
+        this.droppedCrossbows = [];
     }
     update(){
         if (this.image.heightPercentTraveled > 0.2 ) this.attackPlayer();
@@ -231,18 +233,43 @@ class Crossbowman extends Enemy {
             this.inAttackRange = true;
             this.recieveAttack();
         }
+        this.bloodSpurts.forEach( e => {
+            e.update()
+            e.fadeAlpha(-0.04)
+        })
+        this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
+        this.droppedCrossbows.forEach( e => {
+            e.update()
+            if (e.velY < -25) e.fadeAlpha(-1/3)
+        })
     }
     attackPlayer(){
         if (!this.hasAttacked && !this.killed) {
-            this.image.image.src = './images/gaurd_nobolt.png'
             this.hasAttacked = true;
+            this.image.image.src = './images/gaurd_nobolt.png'
+            
         }
     }
     recieveAttack(){
-        if (this.inAttackRange) {
+        if (this.inAttackRange && !this.killed) {
             this.killed = true;
             this.image.image.src = './images/gaurd_dead_nocrossbow.png'
+            const centerX = this.image.centerX
+            const centerY = this.image.centerY
+            const crossbow = new Projectile('./images/crossbow.png',0.5,centerX, centerY,10,0,0,0)
+            crossbow.flipped = this.image.flipped
+            this.droppedCrossbows.push(crossbow)
+            for (let index = 0; index < 60; index++) {
+                const blood = new BloodSpurt(centerX, centerY)
+                this.bloodSpurts.push(blood)
+            }
         }
+    }
+    draw(ctx){
+        this.image.draw(ctx);
+        this.droppedCrossbows.forEach( e =>  e.draw(ctx))
+        this.bloodSpurts.forEach( e => e.draw(ctx))
+        
     }
 }
 
@@ -274,6 +301,8 @@ class GameImage{
     this.sway = 0;
     this.bounce = 0;
     }
+    get centerX(){return this.dx+this.dw/2}
+    get centerY(){return this.dy+this.dh/2}
     
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -383,11 +412,11 @@ class Sprite extends GameImage{
 class Projectile extends GameImage {
     constructor(fileSrc, scale, posX, posY, velTotal, velX, initialAngle, rotationSpeed){
         super(fileSrc, scale, 0)
-        this.dx = posX
-        this.dy = posY
+        this.dx = posX - this.dw/2
+        this.dy = posY - this.dh/2
         this.velTotal = velTotal
         this.velX = velX
-        this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2))
+        this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2)) || 0
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
         this.gravity = 2; //pixel-per-frame velY that is lost each frame 
@@ -410,8 +439,12 @@ class BlockedArrow extends Projectile {
 
 class BloodSpurt extends Projectile {
     constructor(posX,posY,intensity=1){
-        super ('./')
+        super (`./images/blood/${Math.floor(Math.random()*3+1)}.png`,
+            1.5, posX, posY, (Math.random()*10)*intensity, Math.random()*3*intensity*Math.sign(Math.random()-0.5), 
+            0, 0.02)
+        this.gravity *= 0.5;
     }
+    
 }
 
 
@@ -421,7 +454,7 @@ class Player{
         this.ctx = this.game.ctx
         this.health = 1;
         this.block = sprites.block
-        
+        this.counter = 0;
             this.block.frame = 18;
             this.block.updateSourceDimensions();
             this.block.offSetWidth = this.game.width * 0.1;
@@ -539,9 +572,9 @@ class Player{
         
     }
     updateBounceSway() {
-        let counter = this.game.totalFrames;
-        let bounceModifier = Math.sin(counter / 7.5) * 15;
-        let swayModifier = Math.cos(counter / 15) * 10;
+        this.counter ++;
+        let bounceModifier = Math.sin(this.counter / 7.5) * 15;
+        let swayModifier = Math.cos(this.counter / 15) * 10;
         if (bounceModifier > 0) bounceModifier *= -1;
         if (swayModifier > 0) swayModifier *= -1;
         this.block.sway = this.attack.sway = swayModifier;
