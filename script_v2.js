@@ -89,7 +89,9 @@ class Game{
         this.lastTimeStamp = 0;
         this.frameTimeDeficit = 0;
         this.fps = 48;
-        this.framesSinceLastEnemy = 0;
+        this.framesSinceCrossbowman = 0;
+        this.crossbowmanDelay = 100
+        this.enemiesDue = 4;
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.foregroundStart = this.height - 600//first value will need to go up as height value increases, or road will pop off screen 
@@ -115,14 +117,12 @@ class Game{
             document.getElementById("resume-btn").classList.remove("disabled")
             return
         }
-        
-        
-        //this.fps = this.fpsSlider.value
-        let framesDue = this.getFramesDue(timestamp)
+        const framesDue = this.getFramesDue(timestamp)
         for (let i = 0; i < framesDue; i++) {
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
+            this.projectiles.forEach((e) => e.update())
             this.player.update(keyRecord, touchRecord)
             this.updatePerpective()
             this.draw(this.ctx);
@@ -137,35 +137,48 @@ class Game{
             this.scrollingElements[0].alpha = 0;
             this.scrollingElements[1].alpha = 0;    
         }
-        
     }
     handleEnemies(){
         let center = this.width/2
-        if (this.framesSinceLastEnemy > 50 && Math.random()>0.95) {
-            let randomSign = Math.sign(Math.random()-0.5)
-            let newEnemy;
-            newEnemy = new Crossbowman(center + 150*randomSign)
-            newEnemy.image.alpha = 0;
-            if (randomSign > 0) newEnemy.image.flipped = true;
-            this.enemies.unshift(newEnemy)
-            this.framesSinceLastEnemy = 0;
-
-        } else this.framesSinceLastEnemy ++;
-        let arrowLoadedEnemies = this.enemies.filter((e) => e instanceof Crossbowman && !e.hasAttacked)
+        if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
+        else this.framesSinceCrossbowman ++;
         this.enemies.forEach((e)=> e.update());
-        arrowLoadedEnemies.forEach((e) => {
-            if (e.hasAttacked === true){
-                let velocityDirection = Math.sign(e.image.dx - center)
-                let arrowDestinationX = e.image.dx + e.image.dw/2
-                let newArrow = new BlockedArrow(arrowDestinationX,this.height-350, 30, Math.random()*12*velocityDirection)
-                this.projectiles.push(newArrow)
-                //this.player.counter = 0;
-            }
-        
-        })
+        let attackingEnemies = this.enemies.filter(e => e.image.heightPercentTraveled > 0.2 && e.loaded);
+        attackingEnemies.forEach( e => {
+            e.attackPlayer()
+            this.handleFiredArrows(e)
+        })        
         
         
-        this.projectiles.forEach((e) => e.update())
+        // arrowLoadedEnemies.forEach((e) => {
+        //     if (e.hasAttacked === true){
+        //         let velocityDirection = Math.sign(e.image.dx - center)
+        //         let arrowDestinationX = e.image.dx + e.image.dw/2
+        //         let newArrow = new BlockedArrow(arrowDestinationX,this.height-350, 30, Math.random()*12*velocityDirection)
+        //         this.projectiles.push(newArrow)
+        //         //this.player.counter = 0;
+        //     }
+        
+        // })
+    }
+    spawnCrossbowWave() {
+        let roadSide = Math.sign(Math.random()-0.5)
+        if (this.enemiesDue > 0) {
+            const newEnemy = new Crossbowman(this.width/2 + 150*roadSide)
+            newEnemy.image.alpha = 0;
+            if (roadSide === 1) newEnemy.image.flipped = true;
+            this.enemies.unshift(newEnemy)
+            this.framesSinceCrossbowman = 0;
+            this.crossbowmanDelay = Math.random()*60+30
+            this.enemiesDue -= 1
+        } else {
+            this.crossbowmanDelay += 200
+            this.enemiesDue = 4
+            console.log("wave End")
+        }
+        
+    }
+    handleFiredArrows(enemey){
         
     }
     updateUI() {
@@ -178,8 +191,6 @@ class Game{
         this.scrollingElements = this.scrollingElements.filter((e) => {
             return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
         })
-        
-        
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -214,9 +225,11 @@ class Game{
 class Enemy{
     constructor(baseImageSrc, scale, posX){
         this.image = new GameImage(baseImageSrc,scale,posX, 0)
-        this.killed = false;
-        this.hasAttacked = false;
-        this.inAttackRange = false;   
+        this.States = {Spawned: "spawned", 
+                    Attacking: "attacking", 
+                    Dying: "dying", 
+                    Dead: "dead"}
+        this.state = this.States.Spawned
     }
     
 }
@@ -226,13 +239,15 @@ class Crossbowman extends Enemy {
         super('./images/gaurd_bolt.png', 0.25, posX)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
+        this.deathCounter = 0;
+        this.loaded = true;
+        
     }
     update(){
-        if (this.image.heightPercentTraveled > 0.2 ) this.attackPlayer();
-        if (this.image.heightPercentTraveled > 0.5) {
-            this.inAttackRange = true;
-            this.recieveAttack();
-        }
+        
+        if (this.state === "dying") this.deathCounter++;
+        if (this.deathCounter > 48) this.state === "dead"
+        //let projectiles = this.bloodSpurts.concat(this.droppedCrossbows)
         this.bloodSpurts.forEach( e => {
             e.update()
             e.fadeAlpha(-0.04)
@@ -244,24 +259,20 @@ class Crossbowman extends Enemy {
         })
     }
     attackPlayer(){
-        if (!this.hasAttacked && !this.killed) {
-            this.hasAttacked = true;
-            this.image.image.src = './images/gaurd_nobolt.png'
-            
-        }
+        this.loaded = false;
+        this.image.image.src = './images/gaurd_nobolt.png'
     }
     recieveAttack(){
-        if (this.inAttackRange && !this.killed) {
-            this.killed = true;
+        if (this.state === "spawned") {
+            this.state === "dying"
             this.image.image.src = './images/gaurd_dead_nocrossbow.png'
-            const centerX = this.image.centerX
-            const centerY = this.image.centerY
-            const crossbow = new Projectile('./images/crossbow.png',0.5,centerX, centerY,10,0,0,0)
+            const x = this.image.centerX
+            const y = this.image.centerY
+            const crossbow = new Projectile('./images/crossbow.png',0.5,x, y,10,0,0,0)
             crossbow.flipped = this.image.flipped
             this.droppedCrossbows.push(crossbow)
             for (let index = 0; index < 60; index++) {
-                const blood = new BloodSpurt(centerX, centerY)
-                this.bloodSpurts.push(blood)
+                this.bloodSpurts.push = new BloodSpurt(x, y)
             }
         }
     }
@@ -269,7 +280,6 @@ class Crossbowman extends Enemy {
         this.image.draw(ctx);
         this.droppedCrossbows.forEach( e =>  e.draw(ctx))
         this.bloodSpurts.forEach( e => e.draw(ctx))
-        
     }
 }
 
