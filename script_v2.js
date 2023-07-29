@@ -1,4 +1,4 @@
-window.addEventListener('load', function(){
+
 
 
 const canvas = document.getElementById("canvas1");
@@ -67,7 +67,6 @@ document.addEventListener("touchmove", e => {
 document.addEventListener("touchend", e => {
     let id = [...e.changedTouches][0].identifier
     delete touchRecord[`touch${id}`]
-    console.log("end")
 })
 
 
@@ -101,7 +100,6 @@ class Game{
         this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
         this.backgroundSprites = backgroundSprites
         this.player = new Player(this, playerSprites)
-        //this.background = new Background(this, backgroundSprites)
         this.road = backgroundSprites.road
         this.road.offSetWidth = this.width/2 - this.road.dw/2
         this.road.offSetHeight = this.foregroundStart
@@ -109,7 +107,8 @@ class Game{
         this.projectiles = [];
         this.scrollingElements = [];
         this.fpsSlider = document.getElementById("fps")
-        this.healthBar
+        
+        
         
     }
     update(timestamp, keyRecord, touchRecord){
@@ -146,7 +145,7 @@ class Game{
         let attackingEnemies = this.enemies.filter(e => e.image.heightPercentTraveled > 0.2 && e.loaded);
         attackingEnemies.forEach( e => {
             e.attackPlayer()
-            this.handleFiredArrows(e)
+            this.fireAtPlayer(e)
         })        
         
         
@@ -174,11 +173,10 @@ class Game{
         } else {
             this.crossbowmanDelay += 200
             this.enemiesDue = 4
-            console.log("wave End")
         }
         
     }
-    handleFiredArrows(enemey){
+    fireAtPlayer(enemey){
         
     }
     updateUI() {
@@ -191,6 +189,7 @@ class Game{
         this.scrollingElements = this.scrollingElements.filter((e) => {
             return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
         })
+        
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -199,6 +198,8 @@ class Game{
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
         this.player.draw();
+        
+        
     }
     drawStaticBackground(ctx){
         ctx.save()
@@ -290,30 +291,75 @@ class Pikeman extends Enemy {
 }
 
 class GameImage{
-    constructor(fileSrc, initScale = 1, posX = 0, posY = 0){
-    this.scale = initScale
-    this.image = new Image()
-    this.image.src = fileSrc
-    this.sw = this.image.width;
-    this.sh = this.image.height
-    this.sx = 0
-    this.sy = 0
-    this.dx = posX
-    this.dy = posY
-    this.dw = this.sw*this.scale
-    this.dh = this.sh*this.scale
-    this.heightTraveled = 0;
-    this.horizonOffset = this.dx - 1000/2
-    this.angle = 0
-    this.alpha = 1
-    this.shadowAlpha = 0;
-    this.flipped = false;
-    this.sway = 0;
-    this.bounce = 0;
+
+    static perpsectiveBaseWidth = 820
+    static perspectiveHeight = 1000
+    static perspectiveBottomY = canvas.height
+    static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
+    static visiblePerspectiveTopY = GameImage.perspectiveBottomY * 0.4
+    static speedAtMiddleBase = 8
+
+    constructor(fileSrc, scale=1, posX=canvas.width/2, posY=GameImage.visiblePerspectiveTopY){
+        this.scale = scale     /// adjust this value to mean scale at base of perspective triangle 
+        this.image = new Image()
+        this.image.src = fileSrc
+        this.sw = this.image.width;
+        this.sh = this.image.height
+        this.sx = 0
+        this.sy = 0
+        this.dx = posX
+        this.dy = posY
+        this.dw = this.sw*this.scale
+        this.dh = this.sh*this.scale
+        this.heightTraveled = 0;
+        this.horizonOffset = this.dx - 1000/2
+        this.angle = 0
+        this.alpha = 1
+        this.shadowAlpha = 0;
+        this.flipped = false;
+        this.sway = 0;
+        this.bounce = 0;
+        
+        //variables for testing new perspective methods
+        
+        this.startingDistanceFromBase = GameImage.perspectiveBottomY - this.baseY
+        this.startingPercentTraveled = GameImage.perspectiveBottomY/this.startingDistanceFromBase
+        this.distanceFromBase = this.startingDistanceFromBase;
+        
+        
     }
     get centerX(){return this.dx+this.dw/2}
     get centerY(){return this.dy+this.dh/2}
-    
+    get baseY(){return this.dy+this.dh}
+
+
+    moveWithPerspectiveTest(){
+        const percentTraveled = this.distanceFromBase/GameImage.perspectiveStartY
+        const speed = GameImage.speedAtMiddleBase * Math.pow(percentTraveled,2)
+        this.distanceFromBase += speed
+        //const heightAdjustment = ((this.sh * this.scale)*this.startingPercentTraveled - (this.dh)) //* 0.5   ->  do i need to halve?
+        this.dw = percentTraveled * this.sw * this.scale
+        this.dh = percentTraveled * this.sh * this.scale
+        this.dy = this.distanceFromBase - this.dh
+        //this.dx = 
+    }
+    moveWithPerspective(game){
+        const {width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed} = game;
+        this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
+        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.horizonOffset,2)))
+        let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
+        let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
+        let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
+        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.horizonOffset/(width*0.5))
+        this.heightTraveled += speed
+        this.dw =  perspectiveScale * this.sw * this.scale
+        this.dh =  perspectiveScale * this.sh * this.scale
+        this.dy = (foregroundStart - this.dh + this.heightTraveled - heightDistributionAdjustment)
+        this.dx = width/2 - this.dw/2 + (this.horizonOffset * perspectiveScale) - widthDistributionAdjustment
+        
+        if (this.heightTraveled < 100) this.fadeAlpha(0.075)
+        if (this.heightTraveled > height - foregroundStart - 20) this.fadeAlpha(-0.15)
+    }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
         ctx.save()
@@ -368,23 +414,8 @@ class GameImage{
         if (alpha < 0) alpha = 0;
         this.shadowAlpha = alpha;
     }
-    moveWithPerspective(game){
-        const {width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed} = game;
-        this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
-        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.horizonOffset,2)))
-        let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
-        let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
-        let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
-        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.horizonOffset/(width*0.5))
-        this.heightTraveled += speed
-        this.dw =  perspectiveScale * this.sw * this.scale
-        this.dh =  perspectiveScale * this.sh * this.scale
-        this.dy = (foregroundStart - this.dh + this.heightTraveled - heightDistributionAdjustment)
-        this.dx = width/2 - this.dw/2 + (this.horizonOffset * perspectiveScale) - widthDistributionAdjustment
-        
-        if (this.heightTraveled < 100) this.fadeAlpha(0.075)
-        if (this.heightTraveled > height - foregroundStart - 20) this.fadeAlpha(-0.15)
-    }
+    
+    
 }
 
 class Sprite extends GameImage{
@@ -454,7 +485,6 @@ class BloodSpurt extends Projectile {
             0, 0.02)
         this.gravity *= 0.5;
     }
-    
 }
 
 
@@ -652,4 +682,3 @@ function animate(timestamp, game){
 }
 
 
-});
