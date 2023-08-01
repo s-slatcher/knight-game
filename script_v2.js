@@ -87,7 +87,7 @@ class Game{
         this.height = height;
         this.lastTimeStamp = 0;
         this.frameTimeDeficit = 0;
-        this.fps = 48;
+        this.fps = 24;
         this.framesSinceCrossbowman = 0;
         this.crossbowmanDelay = 100
         this.enemiesDue = 4;
@@ -106,6 +106,7 @@ class Game{
         this.enemies = [];
         this.projectiles = [];
         this.scrollingElements = [];
+        this.scrollingElementsTest = [];
         this.fpsSlider = document.getElementById("fps")
         
         
@@ -129,12 +130,20 @@ class Game{
     }
     handleBackground(){
         this.road.update()
-        if (this.totalFrames % 24/this.speedModifier === 1) {
+        if (this.totalFrames % 48/this.speedModifier === 0) {
+            
             let centerX = this.width/2
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",0.6,centerX + 300)) 
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",0.6,centerX - 300)) 
-            this.scrollingElements[0].alpha = 0;
-            this.scrollingElements[1].alpha = 0;    
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX+300)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX-300)) 
+
+            if (this.scrollingElementsTest.length === 0){
+                console.log("generated tree test")
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921)) }
+
+
+            //this.scrollingElements[0].alpha = 0;
+            //this.scrollingElements[1].alpha = 0;    
+
         }
     }
     handleEnemies(){
@@ -183,18 +192,20 @@ class Game{
 
     }
     updatePerpective(){
-        this.enemies.forEach((e) => e.image.moveWithPerspective(this))
-        this.scrollingElements.forEach((e) => e.moveWithPerspective(this))
-        this.enemies = this.enemies.filter((e) => e.image.heightTraveled < this.height-100)
+        
+        // this.enemies.forEach((e) => e.image.moveWithPerspective(this))
+        this.scrollingElements.forEach((e) => e.moveWithPerspectiveTest())
+        // this.enemies = this.enemies.filter((e) => e.image.heightTraveled < this.height-100)
         this.scrollingElements = this.scrollingElements.filter((e) => {
-            return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
-        })
+             return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
+         })
         
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.drawStaticBackground(ctx);
         this.scrollingElements.forEach((e) => e.draw(ctx))
+        this.scrollingElementsTest.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
         this.player.draw();
@@ -223,96 +234,32 @@ class Game{
     }
 }
 
-class Enemy{
-    constructor(baseImageSrc, scale, posX){
-        this.image = new GameImage(baseImageSrc,scale,posX, 0)
-        this.States = {Spawned: "spawned", 
-                    Attacking: "attacking", 
-                    Dying: "dying", 
-                    Dead: "dead"}
-        this.state = this.States.Spawned
-    }
-    
-}
-
-class Crossbowman extends Enemy {
-    constructor(posX){
-        super('./images/gaurd_bolt.png', 0.25, posX)
-        this.bloodSpurts = [];
-        this.droppedCrossbows = [];
-        this.deathCounter = 0;
-        this.loaded = true;
-        
-    }
-    update(){
-        
-        if (this.state === "dying") this.deathCounter++;
-        if (this.deathCounter > 48) this.state === "dead"
-        //let projectiles = this.bloodSpurts.concat(this.droppedCrossbows)
-        this.bloodSpurts.forEach( e => {
-            e.update()
-            e.fadeAlpha(-0.04)
-        })
-        this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
-        this.droppedCrossbows.forEach( e => {
-            e.update()
-            if (e.velY < -25) e.fadeAlpha(-1/3)
-        })
-    }
-    attackPlayer(){
-        this.loaded = false;
-        this.image.image.src = './images/gaurd_nobolt.png'
-    }
-    recieveAttack(){
-        if (this.state === "spawned") {
-            this.state === "dying"
-            this.image.image.src = './images/gaurd_dead_nocrossbow.png'
-            const x = this.image.centerX
-            const y = this.image.centerY
-            const crossbow = new Projectile('./images/crossbow.png',0.5,x, y,10,0,0,0)
-            crossbow.flipped = this.image.flipped
-            this.droppedCrossbows.push(crossbow)
-            for (let index = 0; index < 60; index++) {
-                this.bloodSpurts.push = new BloodSpurt(x, y)
-            }
-        }
-    }
-    draw(ctx){
-        this.image.draw(ctx);
-        this.droppedCrossbows.forEach( e =>  e.draw(ctx))
-        this.bloodSpurts.forEach( e => e.draw(ctx))
-    }
-}
-
-class Pikeman extends Enemy {
-    constructor(posX){
-        //super()
-    }
-}
-
 class GameImage{
 
     static perpsectiveBaseWidth = 820
+    static baseCenterX = canvas.width/2
     static perspectiveHeight = 1000
     static perspectiveBottomY = canvas.height
     static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
-    static visiblePerspectiveTopY = GameImage.perspectiveBottomY * 0.4
+    static perspectiveStartY = GameImage.perspectiveBottomY * 0.4
     static speedAtMiddleBase = 8
+    
 
-    constructor(fileSrc, scale=1, posX=canvas.width/2, posY=GameImage.visiblePerspectiveTopY){
-        this.scale = scale     /// adjust this value to mean scale at base of perspective triangle 
+    constructor(fileSrc, maxWidth, maxHeight, basePosX=GameImage.baseCenterX, basePosY=GameImage.perspectiveStartY, heightOffset = 0){
+        //this.scale = scale     /// adjust this value to mean scale at base of perspective triangle 
         this.image = new Image()
         this.image.src = fileSrc
-        this.sw = this.image.width;
-        this.sh = this.image.height
         this.sx = 0
         this.sy = 0
-        this.dx = posX
-        this.dy = posY
-        this.dw = this.sw*this.scale
-        this.dh = this.sh*this.scale
+        this.percentTraveled = basePosY / GameImage.perspectiveHeight
+        this.maxCenterOffset = (basePosX - GameImage.baseCenterX) / this.percentTraveled
+        this.maxWidth = maxWidth
+        this.maxHeight = maxHeight
+        this.dw = this.maxWidth * this.percentTraveled //these should be set automatically once new perspective method in place 
+        this.dh = this.maxHeight * this.percentTraveled
+        this.dx = basePosX - this.dw/2
+        this.dy = basePosY - this.dh
         this.heightTraveled = 0;
-        this.horizonOffset = this.dx - 1000/2
         this.angle = 0
         this.alpha = 1
         this.shadowAlpha = 0;
@@ -322,10 +269,10 @@ class GameImage{
         
         //variables for testing new perspective methods
         
-        this.startingDistanceFromBase = GameImage.perspectiveBottomY - this.baseY
-        this.startingPercentTraveled = GameImage.perspectiveBottomY/this.startingDistanceFromBase
+        this.startingDistanceFromBase = GameImage.perspectiveBottomY - basePosY
+        this.startingPercentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
         this.distanceFromBase = this.startingDistanceFromBase;
-        
+        console.log(this, basePosX, basePosY, this.dx)
         
     }
     get centerX(){return this.dx+this.dw/2}
@@ -334,28 +281,30 @@ class GameImage{
 
 
     moveWithPerspectiveTest(){
-        const percentTraveled = this.distanceFromBase/GameImage.perspectiveStartY
-        const speed = GameImage.speedAtMiddleBase * Math.pow(percentTraveled,2)
-        this.distanceFromBase += speed
+        this.percentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
+        console.log(this.dx)
+        const speed = GameImage.speedAtMiddleBase * Math.pow(this.percentTraveled,2)
+        this.distanceFromBase -= speed
         //const heightAdjustment = ((this.sh * this.scale)*this.startingPercentTraveled - (this.dh)) //* 0.5   ->  do i need to halve?
-        this.dw = percentTraveled * this.sw * this.scale
-        this.dh = percentTraveled * this.sh * this.scale
-        this.dy = this.distanceFromBase - this.dh
-        //this.dx = 
+        this.dw = this.percentTraveled * this.maxWidth
+        this.dh = this.percentTraveled * this.maxHeight
+        this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
+        this.dx = GameImage.baseCenterX + (this.maxCenterOffset * this.percentTraveled) - this.dw/2
+        
     }
     moveWithPerspective(game){
         const {width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed} = game;
         this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
-        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.horizonOffset,2)))
+        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.baseCenterOffset,2)))
         let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
         let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
         let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
-        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.horizonOffset/(width*0.5))
+        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.baseCenterOffset/(width*0.5))
         this.heightTraveled += speed
         this.dw =  perspectiveScale * this.sw * this.scale
         this.dh =  perspectiveScale * this.sh * this.scale
         this.dy = (foregroundStart - this.dh + this.heightTraveled - heightDistributionAdjustment)
-        this.dx = width/2 - this.dw/2 + (this.horizonOffset * perspectiveScale) - widthDistributionAdjustment
+        this.dx = width/2 - this.dw/2 + (this.baseCenterOffset * perspectiveScale) - widthDistributionAdjustment
         
         if (this.heightTraveled < 100) this.fadeAlpha(0.075)
         if (this.heightTraveled > height - foregroundStart - 20) this.fadeAlpha(-0.15)
@@ -365,10 +314,11 @@ class GameImage{
         ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);    
         if (this.angle !== 0) this.rotate(ctx)
-        ctx.beginPath();
         this.drawShadow(ctx)
         ctx.globalAlpha = this.alpha
-        ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
+        if (this.sw && this.sh) ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
+        else ctx.drawImage(image,dx, dy, dw, dh)
+        
         ctx.restore();
     }
     drawShadow(ctx){
@@ -413,6 +363,11 @@ class GameImage{
         if (alpha > 1) alpha = 1;
         if (alpha < 0) alpha = 0;
         this.shadowAlpha = alpha;
+    }
+    imageSwap(imageSrc){
+        const newImage = new Image()
+        this.newImage.onload = () => this.image = this.newImage
+        newImage.src = image
     }
     
     
@@ -484,6 +439,74 @@ class BloodSpurt extends Projectile {
             1.5, posX, posY, (Math.random()*10)*intensity, Math.random()*3*intensity*Math.sign(Math.random()-0.5), 
             0, 0.02)
         this.gravity *= 0.5;
+    }
+}
+
+
+class Enemy{
+    constructor(baseImageSrc, scale, posX){
+        this.image = new GameImage(baseImageSrc,scale,posX, 0)
+        this.States = {Spawned: "spawned", 
+                    Attacking: "attacking", 
+                    Dying: "dying", 
+                    Dead: "dead"}
+        this.state = this.States.Spawned
+    }
+    
+}
+
+class Crossbowman extends Enemy {
+    constructor(posX){
+        super('./images/gaurd_bolt.png', 0.25, posX)
+        this.bloodSpurts = [];
+        this.droppedCrossbows = [];
+        this.deathCounter = 0;
+        this.loaded = true;
+        
+    }
+    update(){
+        
+        if (this.state === "dying") this.deathCounter++;
+        if (this.deathCounter > 48) this.state === "dead"
+        //let projectiles = this.bloodSpurts.concat(this.droppedCrossbows)
+        this.bloodSpurts.forEach( e => {
+            e.update()
+            e.fadeAlpha(-0.04)
+        })
+        this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
+        this.droppedCrossbows.forEach( e => {
+            e.update()
+            if (e.velY < -25) e.fadeAlpha(-1/3)
+        })
+    }
+    attackPlayer(){
+        this.loaded = false;
+        this.image.image.src = './images/gaurd_nobolt.png'
+    }
+    recieveAttack(){
+        if (this.state === "spawned") {
+            this.state === "dying"
+            this.image.image.src = './images/gaurd_dead_nocrossbow.png'
+            const x = this.image.centerX
+            const y = this.image.centerY
+            const crossbow = new Projectile('./images/crossbow.png',0.5,x, y,10,0,0,0)
+            crossbow.flipped = this.image.flipped
+            this.droppedCrossbows.push(crossbow)
+            for (let index = 0; index < 60; index++) {
+                this.bloodSpurts.push = new BloodSpurt(x, y)
+            }
+        }
+    }
+    draw(ctx){
+        this.image.draw(ctx);
+        this.droppedCrossbows.forEach( e =>  e.draw(ctx))
+        this.bloodSpurts.forEach( e => e.draw(ctx))
+    }
+}
+
+class Pikeman extends Enemy {
+    constructor(posX){
+        //super()
     }
 }
 
