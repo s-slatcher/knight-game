@@ -9,11 +9,13 @@ const startButton = document.getElementById("start-btn")
 const ctx = canvas.getContext('2d');
 const keyRecord = [];
 const touchRecord = {};
+
 canvas.width = 1000;
 canvas.height = 1000;
 canvas.style.aspectRatio = 1/1
 
-
+const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
+const randomValue = (low,high) => Math.random() * (high-low) + low 
 
 startButton.addEventListener('click',() => {
     fetchSprites();
@@ -81,36 +83,25 @@ class Input{
 
 
 class Game{
-    constructor(ctx, width, height, playerSprites, backgroundSprites){
+    constructor(ctx, width, height, player){
         this.ctx = ctx;
         this.width = width;
         this.height = height;
         this.lastTimeStamp = 0;
         this.frameTimeDeficit = 0;
-        this.fps = 24;
+        this.fps = 48;
         this.framesSinceCrossbowman = 0;
         this.crossbowmanDelay = 100
         this.enemiesDue = 4;
         this.totalFrames = 0;
         this.speedModifier = 1;
-        this.foregroundStart = this.height - 600//first value will need to go up as height value increases, or road will pop off screen 
-        this.maxPerspectiveScale = 2.7 //value comes from the perspective built into the road animation
-        this.backgroundSpeed = 1.2 //pixels/frame -> value comes from speed built into the road animation
-        this.roadTriangleHeight = 1000  //estimated from image
-        this.foregroundRoadtopDistance = this.foregroundStart+(this.roadTriangleHeight-this.height)
-        this.backgroundSprites = backgroundSprites
-        this.player = new Player(this, playerSprites)
-        this.road = backgroundSprites.road
-        this.road.offSetWidth = this.width/2 - this.road.dw/2
-        this.road.offSetHeight = this.foregroundStart
+        this.player = player
         this.enemies = [];
         this.projectiles = [];
         this.scrollingElements = [];
         this.scrollingElementsTest = [];
         this.fpsSlider = document.getElementById("fps")
-        
-        
-        
+
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -129,21 +120,16 @@ class Game{
         }
     }
     handleBackground(){
-        this.road.update()
-        if (this.totalFrames % 48/this.speedModifier === 0) {
+        
+        if (this.totalFrames % 24/this.speedModifier === 0) {
             
             let centerX = this.width/2
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX+300)) 
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX-300)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX+800)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX-800))
+            this.scrollingElements[0].alpha = 0;
+            this.scrollingElements[1].alpha = 0;    
 
-            if (this.scrollingElementsTest.length === 0){
-                console.log("generated tree test")
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921)) }
-
-
-            //this.scrollingElements[0].alpha = 0;
-            //this.scrollingElements[1].alpha = 0;    
-
+            
         }
     }
     handleEnemies(){
@@ -170,7 +156,7 @@ class Game{
         // })
     }
     spawnCrossbowWave() {
-        let roadSide = Math.sign(Math.random()-0.5)
+        let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
         if (this.enemiesDue > 0) {
             const newEnemy = new Crossbowman(this.width/2 + 150*roadSide)
             newEnemy.image.alpha = 0;
@@ -208,26 +194,24 @@ class Game{
         this.scrollingElementsTest.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
-        this.player.draw();
-        
+        this.player.draw(ctx);
         
     }
     drawStaticBackground(ctx){
+        
         ctx.save()
         const gradient = ctx.createLinearGradient(0,0,0,200)
+        
         gradient.addColorStop(1,"#b5dae5")
         gradient.addColorStop(0,"#0072b6")
         ctx.fillStyle = gradient;        
         ctx.fillRect(0,0,this.width,this.height)
-        ctx.fillStyle = '#439544'
-        ctx.fillRect(0, this.foregroundStart+2, this.width, this.height-this.foregroundStart)
-        ctx.restore();
-        this.road.draw(ctx);
+        
+        GameImage.drawRoad(ctx)
     }
     getFramesDue(timestamp){
-        let frameTime = timestamp - this.lastTimeStamp;
+        this.frameTimeDeficit += timestamp - this.lastTimeStamp;
         this.lastTimeStamp = timestamp;
-        this.frameTimeDeficit += frameTime;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
         return framesDue;
@@ -235,15 +219,33 @@ class Game{
 }
 
 class GameImage{
-
-    static perpsectiveBaseWidth = 820
+    static perspectiveMultiplier = 1.25
+    static perpsectiveBaseWidth = 820 * GameImage.perspectiveMultiplier//820
     static baseCenterX = canvas.width/2
-    static perspectiveHeight = 1000
+    static perspectiveHeight = 1000 / GameImage.perspectiveMultiplier//1000
     static perspectiveBottomY = canvas.height
     static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
-    static perspectiveStartY = GameImage.perspectiveBottomY * 0.4
-    static speedAtMiddleBase = 8
+    static perspectiveStartPercentage = 0.09 / GameImage.perspectiveMultiplier // 0.4
+    static perspectiveStartY = GameImage.perspectiveTopY + (GameImage.perspectiveHeight * GameImage.perspectiveStartPercentage)
+    static speedAtMiddleBase = 8 * GameImage.perspectiveMultiplier
     
+    static drawRoad(ctx){
+        ctx.fillStyle = '#439544'
+        ctx.fillRect(0, GameImage.perspectiveStartY, GameImage.baseCenterX*2, GameImage.perspectiveBottomY-GameImage.perspectiveStartY)
+        ctx.beginPath()
+        const perspectiveStartWidth = GameImage.perspectiveStartPercentage * GameImage.perpsectiveBaseWidth
+        const point1X = GameImage.baseCenterX - perspectiveStartWidth/2
+        const point2X = point1X + perspectiveStartWidth
+        const point3X = GameImage.baseCenterX + GameImage.perpsectiveBaseWidth/2
+        const point4X = point3X - GameImage.perpsectiveBaseWidth
+        ctx.moveTo(point1X,GameImage.perspectiveStartY)
+        ctx.lineTo(point2X,GameImage.perspectiveStartY)
+        ctx.lineTo(point3X,GameImage.perspectiveBottomY)
+        ctx.lineTo(point4X,GameImage.perspectiveBottomY)
+        ctx.closePath()
+        ctx.fillStyle = "#cfbd86"
+        ctx.fill();
+    }
 
     constructor(fileSrc, maxWidth, maxHeight, basePosX=GameImage.baseCenterX, basePosY=GameImage.perspectiveStartY, heightOffset = 0){
         //this.scale = scale     /// adjust this value to mean scale at base of perspective triangle 
@@ -252,11 +254,11 @@ class GameImage{
         this.sx = 0
         this.sy = 0
         this.percentTraveled = basePosY / GameImage.perspectiveHeight
-        this.maxCenterOffset = (basePosX - GameImage.baseCenterX) / this.percentTraveled
+        this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
         this.maxWidth = maxWidth
         this.maxHeight = maxHeight
         this.dw = this.maxWidth * this.percentTraveled //these should be set automatically once new perspective method in place 
-        this.dh = this.maxHeight * this.percentTraveled
+        this.dh = this.maxHeight * this.percentTraveled 
         this.dx = basePosX - this.dw/2
         this.dy = basePosY - this.dh
         this.heightTraveled = 0;
@@ -272,7 +274,7 @@ class GameImage{
         this.startingDistanceFromBase = GameImage.perspectiveBottomY - basePosY
         this.startingPercentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
         this.distanceFromBase = this.startingDistanceFromBase;
-        console.log(this, basePosX, basePosY, this.dx)
+       
         
     }
     get centerX(){return this.dx+this.dw/2}
@@ -282,7 +284,7 @@ class GameImage{
 
     moveWithPerspectiveTest(){
         this.percentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        console.log(this.dx)
+        
         const speed = GameImage.speedAtMiddleBase * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         //const heightAdjustment = ((this.sh * this.scale)*this.startingPercentTraveled - (this.dh)) //* 0.5   ->  do i need to halve?
@@ -291,23 +293,9 @@ class GameImage{
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX + (this.maxCenterOffset * this.percentTraveled) - this.dw/2
         
-    }
-    moveWithPerspective(game){
-        const {width, height, foregroundRoadtopDistance, foregroundStart, maxPerspectiveScale, backgroundSpeed} = game;
-        this.heightPercentTraveled = this.heightTraveled / (height-(foregroundStart))
-        let speedMultiplier = foregroundRoadtopDistance / (Math.sqrt(Math.pow(foregroundRoadtopDistance,2) + Math.pow(this.baseCenterOffset,2)))
-        let perspectiveScale = (1+(this.heightPercentTraveled*(maxPerspectiveScale-1)))
-        let speed = Math.pow(perspectiveScale,2) * (backgroundSpeed*speedMultiplier)
-        let heightDistributionAdjustment = ((this.sh * this.scale) - (this.dh)) * 0.5
-        let widthDistributionAdjustment = ((this.sw * this.scale) - (this.dw)) * (this.baseCenterOffset/(width*0.5))
-        this.heightTraveled += speed
-        this.dw =  perspectiveScale * this.sw * this.scale
-        this.dh =  perspectiveScale * this.sh * this.scale
-        this.dy = (foregroundStart - this.dh + this.heightTraveled - heightDistributionAdjustment)
-        this.dx = width/2 - this.dw/2 + (this.baseCenterOffset * perspectiveScale) - widthDistributionAdjustment
+        if (this.percentTraveled < 1) this.fadeAlpha(0.15)
+        else this.fadeAlpha(-0.1)
         
-        if (this.heightTraveled < 100) this.fadeAlpha(0.075)
-        if (this.heightTraveled > height - foregroundStart - 20) this.fadeAlpha(-0.15)
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -318,23 +306,21 @@ class GameImage{
         ctx.globalAlpha = this.alpha
         if (this.sw && this.sh) ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
         else ctx.drawImage(image,dx, dy, dw, dh)
-        
         ctx.restore();
     }
     drawShadow(ctx){
-        if (this.heightTraveled < 20) return;
-        const centerX = this.dx + this.dw/2 
-        const centerY = this.dy + this.dh*0.9
+        const centerX = this.centerX
+        const centerY = this.baseY * 0.95
         ctx.beginPath()
         ctx.arc(centerX,centerY,this.dw,0,2*Math.PI);
-        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/4, centerX, centerY, this.dw/1.75)
+        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/10, centerX, centerY, this.dw/1.5)
         gradient.addColorStop(0, "rgba(0,0,0,0.5)")
         gradient.addColorStop(1, "rgba(0,0,0,0)")
         ctx.fillStyle = gradient
         ctx.save()
         ctx.translate(centerX, centerY)
-        ctx.scale(1,0.5)
-        this.fadeShadowAlpha(0.05)
+        ctx.scale(1,0.3)
+        this.shadowAlpha = this.alpha
         ctx.globalAlpha = this.shadowAlpha
         ctx.translate(-centerX, -centerY)
         ctx.fill();
@@ -374,18 +360,13 @@ class GameImage{
 }
 
 class Sprite extends GameImage{
-    constructor(sprite, scale){
-        super(`./images/${sprite.meta.image}`, scale)
+    constructor(sprite, maxWidth, maxHeight){
+        super(`./images/${sprite.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY)
         this.offSetWidth = 0;
         this.offSetHeight = 0;
         this.frame = 0;
         this.sprite = sprite;
         this.frames = sprite.frames
-        this.dx = 0;
-        this.dy = 0;
-        this.dw = this.frames[this.frame].frame.w
-        this.dh = this.frames[this.frame].frame.h
-        
     }
     update(){
         this.frame += 1;
@@ -398,10 +379,11 @@ class Sprite extends GameImage{
         this.sy = frame.y 
         this.sw = frame.w
         this.sh = frame.h
-        this.dw = frame.w * this.scale
-        this.dh = frame.h * this.scale
-        this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway 
-        this.dy = this.heightTraveled ? this.dx + this.offSetHeight + this.bounce : this.offSetHeight + this.bounce
+        // this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway 
+        // this.dy = this.heightTraveled ? this.dx + this.offSetHeight + this.bounce : this.offSetHeight + this.bounce
+    }
+    drawShadow(){
+        return;
     }
 }
 
@@ -512,17 +494,12 @@ class Pikeman extends Enemy {
 
 
 class Player{
-    constructor(game, sprites){
-        this.game = game;
-        this.ctx = this.game.ctx
+    constructor(sprites){
         this.health = 1;
         this.block = sprites.block
         this.counter = 0;
             this.block.frame = 18;
             this.block.updateSourceDimensions();
-            this.block.offSetWidth = this.game.width * 0.1;
-            this.block.offSetHeight =  this.game.height - this.block.dh* 0.9;
-            
             this.block.frameIncrement = 1;
             this.block.frameQueue = [18];
             this.block.positionInQueue = 0;
@@ -535,9 +512,6 @@ class Player{
         this.attack = sprites.attack
             this.attack.frame = 0;
             this.attack.updateSourceDimensions();
-            this.attack.offSetWidth = this.game.width * 0.3;
-            this.attack.offSetHeight = this.game.height - this.attack.dh*0.75
-            
             this.attack.direction = 'none'
             this.block.inputDelayCounter = 0;
         this.input = 'none'
@@ -576,18 +550,18 @@ class Player{
         this.updateBounceSway()
         this.isAttacking ? this.updateAttack() : this.updateBlock();
     }
-    draw(){
+    draw(ctx){
         if (this.isAttacking ) {
-            this.ctx.save()
-            this.directAttack()
-            this.attack.draw(this.ctx)
-            this.ctx.restore();
+            ctx.save()
+            this.directAttack(ctx)
+            this.attack.draw(ctx)
+            ctx.restore();
             this.block.fadeAlpha(-0.2)
         } else {
             this.block.fadeAlpha(0.2);
             this.attack.alpha = 0;
         }
-        this.block.draw(this.ctx);
+        this.block.draw(ctx);
         
     }
     attackTransition(){
@@ -643,19 +617,17 @@ class Player{
         this.block.sway = this.attack.sway = swayModifier;
         this.block.bounce = this.attack.bounce = bounceModifier;
     }
-    directAttack(){
-        const ctx = this.ctx;
-        let xTranslation = 0;
-        ctx.translate(this.game.width/2, this.game.height)
-        ctx.scale(1.35,1)
+    directAttack(ctx){
+        ctx.translate(this.attack.centerX, this.attack.baseY)
+        ctx.scale(1,1)
         if (this.attackDirection === 'd'){
             ctx.rotate(0.75)
-            ctx.scale(-1.35,1)
+            ctx.scale(-1,1)
             
         } else if (this.attackDirection === 'a') {
             ctx.rotate(-0.75)
         }
-        ctx.translate(-this.game.width/2, -this.game.height+300)
+        ctx.translate(-this.attack.centerX, -this.attack.baseY)
         
         
     }
@@ -680,21 +652,19 @@ class Player{
 
 
 async function fetchSprites(){
-    let playerSprites = {}
-    let backgroundSprites = {}
-    const [atkRep, blockRep, roadRep] = await Promise.all([
+    let sprites = {}
+    const [atkRep, blockRep] = await Promise.all([
         fetch("./sword-attack-v2-compressed.json"),
-        fetch("./sword48.json"),
-        fetch("./road_background_v3.json")])
-    await atkRep.json().then((sprite) => playerSprites.attack = new Sprite(sprite, 2));
-    await blockRep.json().then((sprite) => playerSprites.block = new Sprite(sprite, 1));
-    await roadRep.json().then((sprite) => backgroundSprites.road = new Sprite(sprite, 1));
-    startGame(playerSprites,backgroundSprites);
+        fetch("./sword48.json")])
+    await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8));
+    await blockRep.json().then((sprite) => sprites.block = new Sprite(sprite, 842, 609));
+    const player = new Player(sprites)
+    startGame(player);
 };
 
-function startGame(playerSprites,backgroundSprites){ 
-  let game = new Game(ctx, canvas.width, canvas.height, playerSprites, backgroundSprites)
-  animate(0,game);  
+function startGame(player){ 
+    const game = new Game(ctx, canvas.width, canvas.height, player)
+    animate(0,game);  
 }
 function animate(timestamp, game){
     // ctx.clearRect(0, 0, canvas.width, canvas.height);
