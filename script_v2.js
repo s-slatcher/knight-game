@@ -43,8 +43,6 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
 
-document.getElementById("fps").addEventListener('change', (e) => (console.log(e.target.value)))
-
 
 document.addEventListener("touchstart", e => {
     [...e.touches].forEach((touch) => {
@@ -121,12 +119,13 @@ class Game{
     }
     handleBackground(){
         
-        if (this.totalFrames % 24/this.speedModifier === 0) {
-            
+        if (this.totalFrames % 32/this.speedModifier === 0) {
+            let scale = 1.5
             let centerX = this.width/2
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX+800)) 
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643,921,centerX-800))
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX+1000,420)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX-1000,420))
             this.scrollingElements[0].alpha = 0;
+            this.scrollingElements[0].flipped = true;
             this.scrollingElements[1].alpha = 0;    
 
             
@@ -137,7 +136,7 @@ class Game{
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
         this.enemies.forEach((e)=> e.update());
-        let attackingEnemies = this.enemies.filter(e => e.image.heightPercentTraveled > 0.2 && e.loaded);
+        let attackingEnemies = this.enemies.filter(e => e.image.percentTraveled > 0.4 && e.loaded);
         attackingEnemies.forEach( e => {
             e.attackPlayer()
             this.fireAtPlayer(e)
@@ -158,9 +157,9 @@ class Game{
     spawnCrossbowWave() {
         let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
         if (this.enemiesDue > 0) {
-            const newEnemy = new Crossbowman(this.width/2 + 150*roadSide)
+            const newEnemy = new Crossbowman(this.width/2 - 500*roadSide)
             newEnemy.image.alpha = 0;
-            if (roadSide === 1) newEnemy.image.flipped = true;
+            if (roadSide === -1) newEnemy.image.flipped = true;
             this.enemies.unshift(newEnemy)
             this.framesSinceCrossbowman = 0;
             this.crossbowmanDelay = Math.random()*60+30
@@ -179,9 +178,9 @@ class Game{
     }
     updatePerpective(){
         
-        // this.enemies.forEach((e) => e.image.moveWithPerspective(this))
-        this.scrollingElements.forEach((e) => e.moveWithPerspectiveTest())
-        // this.enemies = this.enemies.filter((e) => e.image.heightTraveled < this.height-100)
+        this.enemies.forEach((e) => e.image.moveWithPerspective(this))
+        this.scrollingElements.forEach((e) => e.moveWithPerspective())
+        this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1)
         this.scrollingElements = this.scrollingElements.filter((e) => {
              return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
          })
@@ -219,15 +218,15 @@ class Game{
 }
 
 class GameImage{
-    static perspectiveMultiplier = 1.25
-    static perpsectiveBaseWidth = 820 * GameImage.perspectiveMultiplier//820
+    static perspectiveMultiplier = 1
+    static perpsectiveBaseWidth = 1000 //820
     static baseCenterX = canvas.width/2
-    static perspectiveHeight = 1000 / GameImage.perspectiveMultiplier//1000
+    static perspectiveHeight = 800 //1000
     static perspectiveBottomY = canvas.height
     static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
-    static perspectiveStartPercentage = 0.09 / GameImage.perspectiveMultiplier // 0.4
+    static perspectiveStartPercentage = 0.25  // 0.4
     static perspectiveStartY = GameImage.perspectiveTopY + (GameImage.perspectiveHeight * GameImage.perspectiveStartPercentage)
-    static speedAtMiddleBase = 8 * GameImage.perspectiveMultiplier
+    static speedAtBottomY = 8 
     
     static drawRoad(ctx){
         ctx.fillStyle = '#439544'
@@ -247,20 +246,22 @@ class GameImage{
         ctx.fill();
     }
 
-    constructor(fileSrc, maxWidth, maxHeight, basePosX=GameImage.baseCenterX, basePosY=GameImage.perspectiveStartY, heightOffset = 0){
-        //this.scale = scale     /// adjust this value to mean scale at base of perspective triangle 
+    constructor(fileSrc, maxWidth, maxHeight, 
+        basePosX=GameImage.baseCenterX, basePosY=GameImage.perspectiveStartY, heightOffset = 0){
         this.image = new Image()
         this.image.src = fileSrc
         this.sx = 0
         this.sy = 0
-        this.percentTraveled = basePosY / GameImage.perspectiveHeight
+        this.percentTraveled = ((basePosY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
         this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
         this.maxWidth = maxWidth
         this.maxHeight = maxHeight
+        this.maxHeightOffset = heightOffset    // note to self, this gets ignored for moveWithPerspective, is re-calc'd and readded every draw call
         this.dw = this.maxWidth * this.percentTraveled //these should be set automatically once new perspective method in place 
         this.dh = this.maxHeight * this.percentTraveled 
         this.dx = basePosX - this.dw/2
-        this.dy = basePosY - this.dh
+        this.dy = basePosY - this.dh 
+        
         this.heightTraveled = 0;
         this.angle = 0
         this.alpha = 1
@@ -271,49 +272,50 @@ class GameImage{
         
         //variables for testing new perspective methods
         
-        this.startingDistanceFromBase = GameImage.perspectiveBottomY - basePosY
-        this.startingPercentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        this.distanceFromBase = this.startingDistanceFromBase;
+        
+        
+        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY
        
         
     }
-    get centerX(){return this.dx+this.dw/2}
-    get centerY(){return this.dy+this.dh/2}
+    get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
+    get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
     get baseY(){return this.dy+this.dh}
 
 
-    moveWithPerspectiveTest(){
-        this.percentTraveled = (this.baseY-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        
-        const speed = GameImage.speedAtMiddleBase * Math.pow(this.percentTraveled,2)
+    moveWithPerspective(){
+        this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
+        const speed = GameImage.speedAtBottomY * Math.pow(this.percentTraveled,2)
+        //const heightAdjustment  <-- something gets off when scale goes very high (trees look like they are floating)
         this.distanceFromBase -= speed
-        //const heightAdjustment = ((this.sh * this.scale)*this.startingPercentTraveled - (this.dh)) //* 0.5   ->  do i need to halve?
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
-        this.dx = GameImage.baseCenterX + (this.maxCenterOffset * this.percentTraveled) - this.dw/2
-        
-        if (this.percentTraveled < 1) this.fadeAlpha(0.15)
+        this.dx = GameImage.baseCenterX - this.dw/2
+        //* 0.5   ->  do i need to halve?
+        if (this.percentTraveled < 1) this.fadeAlpha(0.1)
         else this.fadeAlpha(-0.1)
         
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
+        const heightOffset = this.maxHeightOffset * this.percentTraveled // note: might need to incorporate these back in to the calcs for dx,dy
+        const centerOffset = this.maxCenterOffset * this.percentTraveled  // and just call moveWithPerspective on all items every time (just raising their height to counteract)
         ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);    
         if (this.angle !== 0) this.rotate(ctx)
         this.drawShadow(ctx)
         ctx.globalAlpha = this.alpha
-        if (this.sw && this.sh) ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh)
-        else ctx.drawImage(image,dx, dy, dw, dh)
+        if (this.sw && this.sh) ctx.drawImage(image, sx, sy, sw, sh, dx + centerOffset , dy + heightOffset, dw, dh)
+        else ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
         ctx.restore();
     }
     drawShadow(ctx){
         const centerX = this.centerX
-        const centerY = this.baseY * 0.95
+        const centerY = this.baseY * 0.99
         ctx.beginPath()
         ctx.arc(centerX,centerY,this.dw,0,2*Math.PI);
-        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/10, centerX, centerY, this.dw/1.5)
+        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5, centerX, centerY, this.dw/1.5)
         gradient.addColorStop(0, "rgba(0,0,0,0.5)")
         gradient.addColorStop(1, "rgba(0,0,0,0)")
         ctx.fillStyle = gradient
@@ -332,9 +334,9 @@ class GameImage{
         ctx.translate(-(this.dx+(this.dw/2)),-(this.dy+(this.dh/2)))
     }
     flipHorizontal(ctx){
-        ctx.translate(this.dx+(this.dw/2),0)
+        ctx.translate(this.centerX,0)
         ctx.scale(-1,1)
-        ctx.translate(-(this.dx+(this.dw/2)),0)
+        ctx.translate(-this.centerX,0)
     }
     fadeAlpha(increment){
         if (increment === 0) return;
@@ -352,16 +354,16 @@ class GameImage{
     }
     imageSwap(imageSrc){
         const newImage = new Image()
-        this.newImage.onload = () => this.image = this.newImage
-        newImage.src = image
+        newImage.onload = () => this.image = newImage
+        newImage.src = imageSrc
     }
     
     
 }
 
 class Sprite extends GameImage{
-    constructor(sprite, maxWidth, maxHeight){
-        super(`./images/${sprite.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY)
+    constructor(sprite, maxWidth, maxHeight, heightOffset){
+        super(`./images/${sprite.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
         this.offSetWidth = 0;
         this.offSetHeight = 0;
         this.frame = 0;
@@ -426,8 +428,8 @@ class BloodSpurt extends Projectile {
 
 
 class Enemy{
-    constructor(baseImageSrc, scale, posX){
-        this.image = new GameImage(baseImageSrc,scale,posX, 0)
+    constructor(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
+        this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
         this.States = {Spawned: "spawned", 
                     Attacking: "attacking", 
                     Dying: "dying", 
@@ -438,8 +440,8 @@ class Enemy{
 }
 
 class Crossbowman extends Enemy {
-    constructor(posX){
-        super('./images/gaurd_bolt.png', 0.25, posX)
+    constructor(basePosX, basePosY){
+        super('./images/gaurd_bolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
         this.deathCounter = 0;
@@ -463,7 +465,8 @@ class Crossbowman extends Enemy {
     }
     attackPlayer(){
         this.loaded = false;
-        this.image.image.src = './images/gaurd_nobolt.png'
+
+        this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
         if (this.state === "spawned") {
@@ -551,7 +554,7 @@ class Player{
         this.isAttacking ? this.updateAttack() : this.updateBlock();
     }
     draw(ctx){
-        if (this.isAttacking ) {
+        if (this.isAttacking) {
             ctx.save()
             this.directAttack(ctx)
             this.attack.draw(ctx)
@@ -580,6 +583,7 @@ class Player{
         }
 
         attack.updateSourceDimensions()
+        
     };
     updateBlock(){
         const block = this.block;
@@ -617,17 +621,27 @@ class Player{
         this.block.sway = this.attack.sway = swayModifier;
         this.block.bounce = this.attack.bounce = bounceModifier;
     }
-    directAttack(ctx){
-        ctx.translate(this.attack.centerX, this.attack.baseY)
-        ctx.scale(1,1)
-        if (this.attackDirection === 'd'){
-            ctx.rotate(0.75)
-            ctx.scale(-1,1)
+    directAttack(){
+        const attack = this.attack;
+        //ctx.translate(this.attack.centerX, this.attack.baseY)
+        attack.angle = 0;
+        attack.maxCenterOffset = 0
+        attack.maxHeightOffset = 200
+        attack.flipped = false;
+        //attack.maxHeightOffset = 0
+        if (this.attackDirection === 'd'){ 
+           attack.angle = 1.2
+           attack.maxHeightOffset = 50
+           attack.maxCenterOffset = 50
             
         } else if (this.attackDirection === 'a') {
-            ctx.rotate(-0.75)
+            attack.angle = -1.2 
+            attack.maxHeightOffset = 50
+            attack.maxCenterOffset = 30
+        } else {
+            
         }
-        ctx.translate(-this.attack.centerX, -this.attack.baseY)
+        //ctx.translate(-this.attack.centerX, -this.attack.baseY)
         
         
     }
@@ -656,7 +670,7 @@ async function fetchSprites(){
     const [atkRep, blockRep] = await Promise.all([
         fetch("./sword-attack-v2-compressed.json"),
         fetch("./sword48.json")])
-    await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8));
+    await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8, 200));
     await blockRep.json().then((sprite) => sprites.block = new Sprite(sprite, 842, 609));
     const player = new Player(sprites)
     startGame(player);
