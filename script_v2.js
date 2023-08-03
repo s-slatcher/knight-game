@@ -97,9 +97,8 @@ class Game{
         this.enemies = [];
         this.projectiles = [];
         this.scrollingElements = [];
-        this.scrollingElementsTest = [];
         this.fpsSlider = document.getElementById("fps")
-
+        this.testBall = new Projectile()
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -115,10 +114,10 @@ class Game{
             this.player.update(keyRecord, touchRecord)
             this.updatePerpective()
             this.draw(this.ctx);
+            
         }
     }
     handleBackground(){
-        
         if (this.totalFrames % 32/this.speedModifier === 0) {
             let scale = 1.5
             let centerX = this.width/2
@@ -127,33 +126,19 @@ class Game{
             this.scrollingElements[0].alpha = 0;
             this.scrollingElements[0].flipped = true;
             this.scrollingElements[1].alpha = 0;    
-
-            
         }
     }
     handleEnemies(){
         let center = this.width/2
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
-        this.enemies.forEach((e)=> e.update());
-        let attackingEnemies = this.enemies.filter(e => e.image.percentTraveled > 0.4 && e.loaded);
-        attackingEnemies.forEach( e => {
-            
-            e.attackPlayer()
-            this.fireAtPlayer(e)
-        }) 
-        
-        
-        // arrowLoadedEnemies.forEach((e) => {
-        //     if (e.hasAttacked === true){
-        //         let velocityDirection = Math.sign(e.image.dx - center)
-        //         let arrowDestinationX = e.image.dx + e.image.dw/2
-        //         let newArrow = new BlockedArrow(arrowDestinationX,this.height-350, 30, Math.random()*12*velocityDirection)
-        //         this.projectiles.push(newArrow)
-        //         //this.player.counter = 0;
-        //     }
-        
-        // })
+        this.enemies.forEach((e)=> {
+            if(e.image.percentTraveled > 0.4 && e.state === "loaded") {
+                e.attack();
+                this.fireAtPlayer(e);
+            }
+            e.update()
+        });
     }
     spawnCrossbowWave() {
         let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
@@ -171,27 +156,36 @@ class Game{
         }
         
     }
-    fireAtPlayer(enemey){
-        
-    }
-    updateUI() {
-
+    fireAtPlayer(enemy){
+        let velocityDirection = enemy.image.flipped ? 1 : -1
+        let arrowDestinationX = this.width/2 + velocityDirection*100
+        let newArrow = new BlockedArrow(arrowDestinationX,-300, 40, Math.random()*12*velocityDirection)
+        this.projectiles.push(newArrow)
+        this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0)
     }
     updatePerpective(){
-        
-        this.enemies.forEach((e) => e.image.moveWithPerspective(this))
-        this.scrollingElements.forEach((e) => e.moveWithPerspective())
+        this.enemies.forEach((e) => {
+            e.image.moveWithPerspective()
+            if (e.image.percentTraveled < 1) e.image.fadeAlpha(0.1)
+            else e.image.fadeAlpha(-0.1)
+        })
+        this.scrollingElements.forEach((e) => {
+            e.moveWithPerspective()
+            if (e.percentTraveled < 1) e.fadeAlpha(0.1)
+            else e.fadeAlpha(-0.1)
+        })
         this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
         this.scrollingElements = this.scrollingElements.filter((e) => {
-             return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
-         })
+                return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
+            })
         
+        this.testBall.update();
+        this.testBall.moveWithPerspective();
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.drawStaticBackground(ctx);
         this.scrollingElements.forEach((e) => e.draw(ctx))
-        this.scrollingElementsTest.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
         this.player.draw(ctx);
@@ -210,7 +204,6 @@ class Game{
     }
     getFramesDue(timestamp){
         this.frameTimeDeficit += timestamp - this.lastTimeStamp;
-        console.log(timestamp-this.lastTimeStamp)
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
@@ -226,7 +219,7 @@ class GameImage{
     static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
     static perspectiveStartPercentage = 0.25  
     static perspectiveStartY = GameImage.perspectiveTopY + (GameImage.perspectiveHeight * GameImage.perspectiveStartPercentage)
-    static speedAtBottomY = 8 
+    static scrollSpeed = 8 
     
     static drawRoad(ctx){
         ctx.fillStyle = '#439544'
@@ -254,14 +247,14 @@ class GameImage{
         this.sy = 0
         this.percentTraveled = ((basePosY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
         this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
+        this.maxSpeed = GameImage.scrollSpeed
         this.maxWidth = maxWidth
         this.maxHeight = maxHeight
-        this.maxHeightOffset = heightOffset    // note to self, this gets ignored for moveWithPerspective, is re-calc'd and readded every draw call
-        this.dw = this.maxWidth * this.percentTraveled //these should be set automatically once new perspective method in place 
-        this.dh = this.maxHeight * this.percentTraveled 
-        this.dx = basePosX - this.dw/2
+        this.maxHeightOffset = heightOffset
+        this.dw = this.maxWidth * this.percentTraveled  
+        this.dh = this.maxHeight * this.percentTraveled   
+        this.dx = GameImage.baseCenterX - this.dw/2
         this.dy = basePosY - this.dh 
-        
         this.heightTraveled = 0;
         this.angle = 0
         this.alpha = 1
@@ -269,12 +262,9 @@ class GameImage{
         this.flipped = false;
         this.sway = 0;
         this.bounce = 0;
-        
-        //variables for testing new perspective methods
-        
-        
-        
         this.distanceFromBase = GameImage.perspectiveBottomY - basePosY
+        this.iterations = 0
+        
        
         
     }
@@ -285,17 +275,15 @@ class GameImage{
 
     moveWithPerspective(){
         this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        const speed = GameImage.speedAtBottomY * Math.pow(this.percentTraveled,2)
-        //const heightAdjustment  <-- something gets off when scale goes very high (trees look like they are floating)
+        const speed = this.maxSpeed * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX - this.dw/2
-        //* 0.5   ->  do i need to halve?
-        if (this.percentTraveled < 1) this.fadeAlpha(0.1)
-        else this.fadeAlpha(-0.1)
-        
+        //if (this.percentTraveled < 1) this.fadeAlpha(0.1)
+        //else this.fadeAlpha(-0.1)
+        this.iterations++
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -329,9 +317,9 @@ class GameImage{
         ctx.restore()
     }
     rotate(ctx){
-        ctx.translate(this.dx+(this.dw/2),this.dy+(this.dh/2))
+        ctx.translate(this.centerX,this.centerY)
         ctx.rotate(this.angle)
-        ctx.translate(-(this.dx+(this.dw/2)),-(this.dy+(this.dh/2)))
+        ctx.translate(-(this.centerX),-(this.centerY))
     }
     flipHorizontal(ctx){
         ctx.translate(this.centerX,0)
@@ -390,97 +378,126 @@ class Sprite extends GameImage{
 }
 
 class Projectile extends GameImage {
-    constructor(fileSrc, scale, posX, posY, velTotal, velX, initialAngle, rotationSpeed){
-        super(fileSrc, scale, 0)
-        this.dx = posX - this.dw/2
-        this.dy = posY - this.dh/2
+    constructor(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset, velTotal, velX, initialAngle=0, rotationSpeed=0){
+        super(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset)
         this.velTotal = velTotal
         this.velX = velX
         this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2)) || 0
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
-        this.gravity = 2; //pixel-per-frame velY that is lost each frame 
+        this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in perspective)
         
     }
     update(){
-        this.dx += this.velX
-        this.dy -= this.velY
+        this.maxCenterOffset += this.velX
+        this.maxHeightOffset -= this.velY
         this.velY -= this.gravity
         this.angle += this.rotationSpeed*Math.PI*2
+        
+    }
+    drawShadow(){
+        return
     }
 }
 
 class BlockedArrow extends Projectile {
-    constructor(posX,posY,velTotal,velX){
+    constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
-            0.5, posX, posY, velTotal, velX, 3.14*Math.sign(velX), (Math.random()*0.04+0.02)*Math.sign(velX))
+            40*0.5, 180*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
+            velX, 3.14*Math.sign(velX), (Math.random()*0.04+0.02)*Math.sign(velX))
+        this.gravity = 2
     }
+    
+    
 }
 
 class BloodSpurt extends Projectile {
-    constructor(posX,posY,intensity=1){
-        super (`./images/blood/${Math.floor(Math.random()*3+1)}.png`,
-            1.5, posX, posY, (Math.random()*10)*intensity, Math.random()*3*intensity*Math.sign(Math.random()-0.5), 
-            0, 0.02)
-        this.gravity *= 0.5;
+    constructor(basePosX, basePosY, heightOffset){
+        super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
+            50, 50, basePosX, basePosY, heightOffset, randomValue(3,15), 
+            randomValue(-3,6), 0, 0)
+        this.gravity = 0.8;
+        this.maxSpeed = GameImage.scrollSpeed+(this.velTotal/3)
     }
+    update(){
+        super.update()
+        this.fadeAlpha(-0.02)
+        if (this.maxHeightOffset >= 0){
+            this.maxHeightOffset = 0;
+            this.velX = 0;
+            this.maxSpeed = GameImage.scrollSpeed
+        }
+        this.moveWithPerspective();
+    }
+    
 }
 
 
 class Enemy{
     constructor(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
         this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
-        this.States = {Spawned: "spawned", 
-                    Attacking: "attacking", 
-                    Dying: "dying", 
-                    Dead: "dead"}
-        this.state = this.States.Spawned
+        
     }
     
 }
 
 class Crossbowman extends Enemy {
     constructor(basePosX, basePosY){
-        super('./images/gaurd_bolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
+        super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
         this.deathCounter = 0;
-        this.loaded = true;
-        
+        this.inSightOfTarget = false;
+        this.States = { Unloaded: "unloaded",
+                        Loaded: "loaded",
+                        Attacked: "attacked", 
+                        Dead: "dead"}
+        this.state = "unloaded"
     }
     update(){
-        
-        if (this.state === "dying") this.deathCounter++;
-        if (this.deathCounter > 48) this.state === "dead"
+        if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
+        //if (this.image.percentTraveled > 0.5 && this.state !== "dead") this.recieveAttack();
         //let projectiles = this.bloodSpurts.concat(this.droppedCrossbows)
         this.bloodSpurts.forEach( e => {
             e.update()
-            e.fadeAlpha(-0.04)
         })
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
         this.droppedCrossbows.forEach( e => {
             e.update()
-            if (e.velY < -25) e.fadeAlpha(-1/3)
+            
+            if (e.maxHeightOffset >= 0){
+                e.maxHeightOffset = 0;
+                e.velX = 0;
+            }
+            e.moveWithPerspective();
         })
-    }
-    attackPlayer(){
+        this.droppedCrossbows = this.droppedCrossbows.filter( e => e.alpha > 0)
         
-        this.loaded = false;
+    }
+    loadCrossbow(){
+        this.state = "loaded"
+        this.image.imageSwap('./images/gaurd_loaded.png')   
+    }
+    attack(){
+        this.state = "attacking"
         this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
-        if (this.state === "spawned") {
-            this.state === "dying"
-            this.image.image.src = './images/gaurd_dead_nocrossbow.png'
-            const x = this.image.centerX
-            const y = this.image.centerY
-            const crossbow = new Projectile('./images/crossbow.png',0.5,x, y,10,0,0,0)
-            crossbow.flipped = this.image.flipped
-            this.droppedCrossbows.push(crossbow)
-            for (let index = 0; index < 60; index++) {
-                this.bloodSpurts.push = new BloodSpurt(x, y)
-            }
+        this.state = "dead"
+        this.image.image.src = './images/gaurd_dead_nocrossbow.png'
+        const x = GameImage.baseCenterX + this.image.maxCenterOffset
+        const y = this.image.baseY
+        const heightOffset = -this.image.maxHeight/2 
+        const crossbow = new Projectile('./images/crossbow.png', 250*0.8, 141*0.8, x, y+40, heightOffset, 10, Math.sign(this.image.maxCenterOffset)*-2)
+        crossbow.flipped = this.image.flipped
+        this.droppedCrossbows.push(crossbow)
+        for (let index = 0; index < 60; index++) {
+            this.bloodSpurts.push(new BloodSpurt(x, y, heightOffset))
+            
         }
+        
+        
+        
     }
     draw(ctx){
         this.image.draw(ctx);
