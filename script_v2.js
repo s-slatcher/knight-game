@@ -107,7 +107,7 @@ class Game{
             return
         }
         const framesDue = this.getFramesDue(timestamp)
-        for (let i = 0; i < framesDue; i++) {
+        if (framesDue !== 0) {
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
@@ -122,8 +122,8 @@ class Game{
         if (this.totalFrames % 32/this.speedModifier === 0) {
             let scale = 1.5
             let centerX = this.width/2
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX+1000,420)) 
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX-1000,420))
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX+1000,undefined,40)) 
+            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX-1000,undefined,40))
             this.scrollingElements[0].alpha = 0;
             this.scrollingElements[0].flipped = true;
             this.scrollingElements[1].alpha = 0;    
@@ -138,9 +138,10 @@ class Game{
         this.enemies.forEach((e)=> e.update());
         let attackingEnemies = this.enemies.filter(e => e.image.percentTraveled > 0.4 && e.loaded);
         attackingEnemies.forEach( e => {
+            
             e.attackPlayer()
             this.fireAtPlayer(e)
-        })        
+        }) 
         
         
         // arrowLoadedEnemies.forEach((e) => {
@@ -180,7 +181,7 @@ class Game{
         
         this.enemies.forEach((e) => e.image.moveWithPerspective(this))
         this.scrollingElements.forEach((e) => e.moveWithPerspective())
-        this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1)
+        this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
         this.scrollingElements = this.scrollingElements.filter((e) => {
              return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
          })
@@ -198,7 +199,6 @@ class Game{
     }
     drawStaticBackground(ctx){
         
-        ctx.save()
         const gradient = ctx.createLinearGradient(0,0,0,200)
         
         gradient.addColorStop(1,"#b5dae5")
@@ -210,6 +210,7 @@ class Game{
     }
     getFramesDue(timestamp){
         this.frameTimeDeficit += timestamp - this.lastTimeStamp;
+        console.log(timestamp-this.lastTimeStamp)
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
@@ -218,13 +219,12 @@ class Game{
 }
 
 class GameImage{
-    static perspectiveMultiplier = 1
-    static perpsectiveBaseWidth = 1000 //820
+    static perpsectiveBaseWidth = 1000 
     static baseCenterX = canvas.width/2
-    static perspectiveHeight = 800 //1000
+    static perspectiveHeight = 800 
     static perspectiveBottomY = canvas.height
     static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
-    static perspectiveStartPercentage = 0.25  // 0.4
+    static perspectiveStartPercentage = 0.25  
     static perspectiveStartY = GameImage.perspectiveTopY + (GameImage.perspectiveHeight * GameImage.perspectiveStartPercentage)
     static speedAtBottomY = 8 
     
@@ -312,7 +312,7 @@ class GameImage{
     }
     drawShadow(ctx){
         const centerX = this.centerX
-        const centerY = this.baseY * 0.99
+        const centerY = this.baseY - 10
         ctx.beginPath()
         ctx.arc(centerX,centerY,this.dw,0,2*Math.PI);
         const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5, centerX, centerY, this.dw/1.5)
@@ -464,8 +464,8 @@ class Crossbowman extends Enemy {
         })
     }
     attackPlayer(){
+        
         this.loaded = false;
-
         this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
@@ -684,6 +684,7 @@ function animate(timestamp, game){
     // ctx.clearRect(0, 0, canvas.width, canvas.height);
     game.update(timestamp, keyRecord, touchRecord)
     requestAnimationFrame((timestamp)=>{
+        
         animate(timestamp, game)
     })
 }
