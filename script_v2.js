@@ -98,7 +98,7 @@ class Game{
         this.projectiles = [];
         this.scrollingElements = [];
         this.fpsSlider = document.getElementById("fps")
-        this.testBall = new Projectile()
+        this.testBall = new Ball()
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -179,8 +179,7 @@ class Game{
                 return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
             })
         
-        this.testBall.update();
-        this.testBall.moveWithPerspective();
+                            this.testBall.update();
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -188,6 +187,7 @@ class Game{
         this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
+                            this.testBall.draw(ctx);
         this.player.draw(ctx);
         
     }
@@ -301,17 +301,19 @@ class GameImage{
     drawShadow(ctx){
         const centerX = this.centerX
         const centerY = this.baseY - 10
+        let sizeMulti = 1 + -this.maxHeightOffset/500
+        if (sizeMulti < 1) sizeMulti = 1;
         ctx.beginPath()
-        ctx.arc(centerX,centerY,this.dw,0,2*Math.PI);
-        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5, centerX, centerY, this.dw/1.5)
+        ctx.arc(centerX,centerY,this.dw * sizeMulti,0,2*Math.PI);
+        const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5 * sizeMulti, centerX, centerY, this.dw/1.5 * sizeMulti)
         gradient.addColorStop(0, "rgba(0,0,0,0.5)")
         gradient.addColorStop(1, "rgba(0,0,0,0)")
         ctx.fillStyle = gradient
         ctx.save()
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
-        this.shadowAlpha = this.alpha
-        ctx.globalAlpha = this.shadowAlpha
+        this.shadowAlpha = this.alpha * 1/sizeMulti
+        ctx.globalAlpha = this.shadowAlpha 
         ctx.translate(-centerX, -centerY)
         ctx.fill();
         ctx.restore()
@@ -395,9 +397,7 @@ class Projectile extends GameImage {
         this.angle += this.rotationSpeed*Math.PI*2
         
     }
-    drawShadow(){
-        return
-    }
+    
 }
 
 class BlockedArrow extends Projectile {
@@ -406,6 +406,9 @@ class BlockedArrow extends Projectile {
             40*0.5, 180*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), (Math.random()*0.04+0.02)*Math.sign(velX))
         this.gravity = 2
+    }
+    drawShadow(){
+        return
     }
     
     
@@ -429,7 +432,46 @@ class BloodSpurt extends Projectile {
         }
         this.moveWithPerspective();
     }
-    
+    drawShadow(){
+        return
+    }
+}
+
+class Ball extends Projectile {
+    constructor(){
+        super(`./images/football.png`,120,120,
+                650, 500, 0, 0,0)
+        this.velY = 0
+        this.velX = 0
+        this.velZ = 0
+        this.gravity = 3
+    }
+    update(){
+        this.moveWithPerspective();
+            this.maxHeightOffset -= this.velY
+            this.maxSpeed = GameImage.scrollSpeed - this.velZ
+            if (this.maxHeightOffset < 0) {
+                this.velY -= this.gravity
+            }
+            else {
+                this.maxHeightOffset = 0;
+                this.velY *= -0.8
+                this.velY -= 5
+                this.velZ -= 0.25
+                if (this.velY < 0.5) this.velY = 0
+            }
+        
+        if (this.velZ > 0.5){
+            this.airResist = Math.pow(this.velZ,2)/2000
+            this.velZ -= this.airResist
+        } else this.velZ = 0
+
+        if (this.percentTraveled > 1){
+            this.velY = 40*randomValue(1,1.5)
+            this.velZ = 90-this.velY
+        }
+        
+    }
 }
 
 
@@ -457,7 +499,6 @@ class Crossbowman extends Enemy {
     update(){
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         //if (this.image.percentTraveled > 0.5 && this.state !== "dead") this.recieveAttack();
-        //let projectiles = this.bloodSpurts.concat(this.droppedCrossbows)
         this.bloodSpurts.forEach( e => {
             e.update()
         })
