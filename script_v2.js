@@ -1,5 +1,4 @@
-
-
+/** @type {HTMLCanvasElement} */
 
 const canvas = document.getElementById("canvas1");
 const pauseMenu = document.getElementById("pauseMenu")
@@ -15,7 +14,7 @@ canvas.height = 1000;
 canvas.style.aspectRatio = 1/1
 
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
-const randomValue = (low,high) => Math.random() * (high-low) + low 
+const randomValue = (a,b) => Math.random() * (b-a) + a
 
 startButton.addEventListener('click',() => {
     fetchSprites();
@@ -98,7 +97,7 @@ class Game{
         this.projectiles = [];
         this.scrollingElements = [];
         this.fpsSlider = document.getElementById("fps")
-        this.testBall = new Ball()
+        //this.testBall = new Ball()
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -178,9 +177,6 @@ class Game{
         this.scrollingElements = this.scrollingElements.filter((e) => {
                 return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
             })
-        
-                            this.testBall.update();
-                            if (Math.abs(this.testBall.maxCenterOffset) > 650) this.testBall = new Ball();
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -188,8 +184,7 @@ class Game{
         
         this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
-        this.projectiles.forEach((e)=>e.draw(ctx))
-        this.testBall.draw(ctx);                    
+        this.projectiles.forEach((e)=>e.draw(ctx))                    
         this.player.draw(ctx);
         
     }
@@ -273,20 +268,18 @@ class GameImage{
 
     moveWithPerspective(){
         this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
+        if (this.percentTraveled > 2) return;
         const speed = this.maxSpeed * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX - this.dw/2
-        //if (this.percentTraveled < 1) this.fadeAlpha(0.1)
-        //else this.fadeAlpha(-0.1)
-        
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled // note: might need to incorporate these back in to the calcs for dx,dy
-        const centerOffset = this.maxCenterOffset * this.percentTraveled  // and just call moveWithPerspective on all items every time (just raising their height to counteract)
+        const centerOffset = this.maxCenterOffset * this.percentTraveled // and just call moveWithPerspective on all items every time (just raising their height to counteract)
         ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);    
         if (this.angle !== 0) this.rotate(ctx)
@@ -296,7 +289,7 @@ class GameImage{
         else ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
         ctx.restore();
     }
-    drawShadow(ctx){
+    drawShadow(ctx){                                // could use this to test offscreen canvas and bitmapping to get shadow composition to work well?
         const centerX = this.centerX
         const centerY = this.baseY - 10
         let sizeMulti = 1 + -this.maxHeightOffset/500
@@ -306,8 +299,8 @@ class GameImage{
         const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5 * sizeMulti, centerX, centerY, this.dw/1.5 * sizeMulti)
         gradient.addColorStop(0, "rgba(0,0,0,0.5)")
         gradient.addColorStop(1, "rgba(0,0,0,0)")
-        ctx.fillStyle = gradient
         ctx.save()
+        ctx.fillStyle = gradient
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
         this.shadowAlpha = this.alpha * 1/sizeMulti
@@ -392,12 +385,9 @@ class Projectile extends GameImage {
         this.maxCenterOffset += this.velX
         this.maxHeightOffset -= this.velY
         this.velY -= this.gravity
-        this.angle += this.rotationSpeed*Math.PI*2
-        
-    }
-    
+        this.angle += this.rotationSpeed*Math.PI*2   
+    }   
 }
-
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
@@ -408,8 +398,6 @@ class BlockedArrow extends Projectile {
     drawShadow(){
         return
     }
-    
-    
 }
 
 class BloodSpurt extends Projectile {
@@ -432,6 +420,21 @@ class BloodSpurt extends Projectile {
     }
     drawShadow(){
         return
+    }
+    
+}
+
+class Crossbow extends Projectile {
+    constructor(basePosX, basePosY, heightOffset){
+        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY+40, heightOffset, 10, 0)
+    }
+    update(){
+        super.update();
+        if (this.maxHeightOffset >= 0){
+            this.maxHeightOffset = 0;
+            this.velX = 0;
+        }
+        this.moveWithPerspective();
     }
 }
 
@@ -504,19 +507,13 @@ class Crossbowman extends Enemy {
     }
     update(){
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
-        //if (this.image.percentTraveled > 0.5 && this.state !== "dead") this.recieveAttack();
+        if (this.image.percentTraveled > 0.5 && this.state !== "dead") this.recieveAttack();
         this.bloodSpurts.forEach( e => {
             e.update()
         })
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
         this.droppedCrossbows.forEach( e => {
             e.update()
-            
-            if (e.maxHeightOffset >= 0){
-                e.maxHeightOffset = 0;
-                e.velX = 0;
-            }
-            e.moveWithPerspective();
         })
         this.droppedCrossbows = this.droppedCrossbows.filter( e => e.alpha > 0)
         
@@ -535,7 +532,7 @@ class Crossbowman extends Enemy {
         const x = GameImage.baseCenterX + this.image.maxCenterOffset
         const y = this.image.baseY
         const heightOffset = -this.image.maxHeight/2 
-        const crossbow = new Projectile('./images/crossbow.png', 250*0.8, 141*0.8, x, y+40, heightOffset, 10, Math.sign(this.image.maxCenterOffset)*-2)
+        const crossbow = new Crossbow(x-(50*Math.sign(this.image.maxCenterOffset)), y+20, heightOffset)
         crossbow.flipped = this.image.flipped
         this.droppedCrossbows.push(crossbow)
         for (let index = 0; index < 60; index++) {
@@ -637,7 +634,9 @@ class Player{
     }
     updateAttack(){
         const attack = this.attack
-        if (attack.frame === 0) this.attackDirection = this.input;
+        if (attack.frame === 0) {
+            this.attackDirection = this.input;
+        }
         attack.frame++;
         if (attack.frame < 10) attack.fadeAlpha(0.2)
         if(attack.frame > 20) attack.fadeAlpha(-0.2)
@@ -647,7 +646,6 @@ class Player{
         }
 
         attack.updateSourceDimensions()
-        
     };
     updateBlock(){
         const block = this.block;
@@ -690,18 +688,17 @@ class Player{
         //ctx.translate(this.attack.centerX, this.attack.baseY)
         attack.angle = 0;
         attack.maxCenterOffset = 0
-        attack.maxHeightOffset = 200
-        attack.flipped = false;
+        attack.maxHeightOffset = 300
         //attack.maxHeightOffset = 0
         if (this.attackDirection === 'd'){ 
-           attack.angle = 1.2
-           attack.maxHeightOffset = 50
-           attack.maxCenterOffset = 50
+           attack.angle = 1.35
+           attack.maxHeightOffset = 80
+           attack.maxCenterOffset = 30
             
         } else if (this.attackDirection === 'a') {
-            attack.angle = -1.2 
+            attack.angle = -1.35
             attack.maxHeightOffset = 50
-            attack.maxCenterOffset = 30
+            attack.maxCenterOffset = -40
         } else {
             
         }
