@@ -180,14 +180,16 @@ class Game{
             })
         
                             this.testBall.update();
+                            if (Math.abs(this.testBall.maxCenterOffset) > 650) this.testBall = new Ball();
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.drawStaticBackground(ctx);
+        
         this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
         this.projectiles.forEach((e)=>e.draw(ctx))
-                            this.testBall.draw(ctx);
+        this.testBall.draw(ctx);                    
         this.player.draw(ctx);
         
     }
@@ -262,11 +264,7 @@ class GameImage{
         this.flipped = false;
         this.sway = 0;
         this.bounce = 0;
-        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY
-        this.iterations = 0
-        
-       
-        
+        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY        
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
@@ -283,7 +281,7 @@ class GameImage{
         this.dx = GameImage.baseCenterX - this.dw/2
         //if (this.percentTraveled < 1) this.fadeAlpha(0.1)
         //else this.fadeAlpha(-0.1)
-        this.iterations++
+        
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -440,7 +438,7 @@ class BloodSpurt extends Projectile {
 class Ball extends Projectile {
     constructor(){
         super(`./images/football.png`,120,120,
-                650, 500, 0, 0,0)
+                650, 700, -300, 0,0)
         this.velY = 0
         this.velX = 0
         this.velZ = 0
@@ -448,27 +446,35 @@ class Ball extends Projectile {
     }
     update(){
         this.moveWithPerspective();
-            this.maxHeightOffset -= this.velY
-            this.maxSpeed = GameImage.scrollSpeed - this.velZ
-            if (this.maxHeightOffset < 0) {
-                this.velY -= this.gravity
-            }
-            else {
-                this.maxHeightOffset = 0;
-                this.velY *= -0.8
-                this.velY -= 5
-                this.velZ -= 0.25
-                if (this.velY < 0.5) this.velY = 0
-            }
+        this.maxHeightOffset -= this.velY
+        this.maxCenterOffset += this.velX
+        this.maxSpeed = GameImage.scrollSpeed - this.velZ
+        if (this.maxHeightOffset < 0) {
+            this.velY -= this.gravity
+        }
+        else {
+            this.maxHeightOffset = 0;
+            this.velY *= -0.8
+            this.velY -= 5
+            this.velZ -= 0.25
+            this.velX -= 0.1 * Math.sign(this.velX)
+            if (this.velY < 0.5) this.velY = 0
+        }
         
-        if (this.velZ > 0.5){
-            this.airResist = Math.pow(this.velZ,2)/2000
+        if (this.velZ > 0.1){
+            this.airResist = Math.pow(this.velZ,2)/2000 
             this.velZ -= this.airResist
         } else this.velZ = 0
+
+        if (Math.abs(this.velX) > 0.1){
+            this.airResist = Math.pow(this.velX,2)/2000 * Math.sign(this.velX)
+            this.velX -= this.airResist
+        } else this.velX = 0
 
         if (this.percentTraveled > 1){
             this.velY = 40*randomValue(1,1.5)
             this.velZ = 90-this.velY
+            this.velX = randomValue(-10,10)
         }
         
     }
