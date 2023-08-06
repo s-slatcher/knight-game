@@ -1,6 +1,7 @@
 /** @type {HTMLCanvasElement} */
 
 const canvas = document.getElementById("canvas1");
+const canvas2 = document.createElement("canvas")
 const pauseMenu = document.getElementById("pauseMenu")
 const canvasContainer = document.getElementById("canvas-container")
 const resumeButton = document.getElementById("resume-btn")
@@ -11,6 +12,8 @@ const touchRecord = {};
 
 canvas.width = 1000;
 canvas.height = 1000;
+canvas2.width = 1000
+canvas2.height = 1000
 canvas.style.aspectRatio = 1/1
 
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
@@ -67,8 +70,6 @@ document.addEventListener("touchend", e => {
     let id = [...e.changedTouches][0].identifier
     delete touchRecord[`touch${id}`]
 })
-
-
 
 class Input{
     constructor(keyRecord, touchRecord){
@@ -156,11 +157,21 @@ class Game{
         
     }
     fireAtPlayer(enemy){
-        let velocityDirection = enemy.image.flipped ? 1 : -1
-        let arrowDestinationX = this.width/2 + velocityDirection*100
-        let newArrow = new BlockedArrow(arrowDestinationX,-300, 40, Math.random()*12*velocityDirection)
-        this.projectiles.push(newArrow)
-        this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0)
+        let velocityDirection = -1
+        let direction = 'a'
+        if (enemy.image.flipped){
+            velocityDirection = 1
+            direction = 'd'
+        }
+        if (this.player.state.block === direction) {
+            let arrowDestinationX = this.width/2 + velocityDirection*150
+            let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+            this.projectiles.push(newArrow)
+            this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0)
+        } else {
+            console.log("hit by arrow")
+            console.log (this.player.state.block)
+        }
     }
     updatePerpective(){
         this.enemies.forEach((e) => {
@@ -200,10 +211,12 @@ class Game{
         GameImage.drawRoad(ctx)
     }
     getFramesDue(timestamp){
-        this.frameTimeDeficit += timestamp - this.lastTimeStamp;
+        const frameTime = timestamp - this.lastTimeStamp
+        this.frameTimeDeficit += frameTime;
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
+        if (frameTime > 30) console.log(frameTime, "ms --- high frame time warning")
         return framesDue;
     }
 }
@@ -289,7 +302,7 @@ class GameImage{
         else ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
         ctx.restore();
     }
-    drawShadow(ctx){                                // could use this to test offscreen canvas and bitmapping to get shadow composition to work well?
+    drawShadow(ctx){
         const centerX = this.centerX
         const centerY = this.baseY - 10
         let sizeMulti = 1 + -this.maxHeightOffset/500
@@ -303,7 +316,7 @@ class GameImage{
         ctx.fillStyle = gradient
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
-        this.shadowAlpha = this.alpha * 1/sizeMulti
+        this.shadowAlpha = this.alpha * 1/Math.pow(sizeMulti,4)
         ctx.globalAlpha = this.shadowAlpha 
         ctx.translate(-centerX, -centerY)
         ctx.fill();
@@ -392,11 +405,44 @@ class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
             40*0.5, 180*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
-            velX, 3.14*Math.sign(velX), (Math.random()*0.04+0.02)*Math.sign(velX))
-        this.gravity = 2
+            velX, 3.14*Math.sign(velX), randomValue(0.05,0.08)*Math.sign(velX))
+        this.gravity = 3
     }
     drawShadow(){
         return
+    }
+}
+
+class FiredArrow extends Projectile {
+    constructor(basePosX, basePosY, heightOffset){
+        super('./images/fired_arrow.png', 50, 100, basePosX, basePosY+10, heightOffset,0, 
+            -40*Math.sign(basePosX - GameImage.baseCenterX),0.25*Math.sign(basePosX - GameImage.baseCenterX))
+        this.gravity = 0;
+        this.velY = 1
+        this.maxSpeed = 160
+    }
+    update(){
+        super.update();
+        this.moveWithPerspective();
+    }
+    drawShadow(){
+        return
+    }
+
+}
+
+
+class Crossbow extends Projectile {
+    constructor(basePosX, basePosY, heightOffset){
+        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY+40, heightOffset, 10, 0)
+    }
+    update(){
+        super.update();
+        if (this.maxHeightOffset >= 0){
+            this.maxHeightOffset = 0;
+            this.velX = 0;
+        }
+        this.moveWithPerspective();
     }
 }
 
@@ -424,18 +470,8 @@ class BloodSpurt extends Projectile {
     
 }
 
-class Crossbow extends Projectile {
-    constructor(basePosX, basePosY, heightOffset){
-        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY+40, heightOffset, 10, 0)
-    }
-    update(){
-        super.update();
-        if (this.maxHeightOffset >= 0){
-            this.maxHeightOffset = 0;
-            this.velX = 0;
-        }
-        this.moveWithPerspective();
-    }
+class Spark extends Projectile{
+    
 }
 
 class Ball extends Projectile {
@@ -468,7 +504,6 @@ class Ball extends Projectile {
             this.airResist = Math.pow(this.velZ,2)/2000 
             this.velZ -= this.airResist
         } else this.velZ = 0
-
         if (Math.abs(this.velX) > 0.1){
             this.airResist = Math.pow(this.velX,2)/2000 * Math.sign(this.velX)
             this.velX -= this.airResist
@@ -497,6 +532,7 @@ class Crossbowman extends Enemy {
         super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
+        this.firedArrows = [];
         this.deathCounter = 0;
         this.inSightOfTarget = false;
         this.States = { Unloaded: "unloaded",
@@ -511,11 +547,13 @@ class Crossbowman extends Enemy {
         this.bloodSpurts.forEach( e => {
             e.update()
         })
+        this.firedArrows.forEach( e => e.update())
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
         this.droppedCrossbows.forEach( e => {
             e.update()
         })
         this.droppedCrossbows = this.droppedCrossbows.filter( e => e.alpha > 0)
+        this.firedArrows = this.firedArrows.filter( e => e.percentTraveled < 0.8)
         
     }
     loadCrossbow(){
@@ -524,6 +562,11 @@ class Crossbowman extends Enemy {
     }
     attack(){
         this.state = "attacking"
+        const x = GameImage.baseCenterX + this.image.maxCenterOffset
+        const y = this.image.baseY
+        const heightOffset = -this.image.maxHeight/2 
+        const arrow = new FiredArrow(x,y,heightOffset)
+        this.firedArrows.push(arrow)
         this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
@@ -547,6 +590,7 @@ class Crossbowman extends Enemy {
         this.image.draw(ctx);
         this.droppedCrossbows.forEach( e =>  e.draw(ctx))
         this.bloodSpurts.forEach( e => e.draw(ctx))
+        this.firedArrows.forEach(e => e.draw(ctx))
     }
 }
 
@@ -613,6 +657,7 @@ class Player{
         this.readTouch(touchRecord)
         this.updateBounceSway()
         this.isAttacking ? this.updateAttack() : this.updateBlock();
+        this.setState();
     }
     draw(ctx){
         if (this.isAttacking) {
@@ -718,7 +763,7 @@ class Player{
         if (this.block.frame > 30) this.state.block = 'd' 
         else if (this.block.frame < 6) this.state.block = 'a' 
         if (this.attack.isAttacking) this.state.block = false;
-        if (this.attack.frame > 18 && this.attack.frame < 28){
+        if (this.attack.frame > 18 && this.attack.frame < 23){
             this.state.attack = this.attack.attackDirection
         }
         
