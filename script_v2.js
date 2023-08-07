@@ -133,6 +133,11 @@ class Game{
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
         this.enemies.forEach((e)=> {
+            const inRange = e.image.percentTraveled > 0.65 && e.image.percentTraveled < 0.9
+            if (inRange){
+                if (e.image.flipped && this.player.state.attack === 'd') e.recieveAttack();
+                if (!e.image.flipped && this.player.state.attack === 'a') e.recieveAttack();
+            }
             if(e.image.percentTraveled > 0.4 && e.state === "loaded") {
                 e.attack();
                 this.fireAtPlayer(e);
@@ -166,12 +171,17 @@ class Game{
         if (this.player.state.block === direction) {
             let arrowDestinationX = this.width/2 + velocityDirection*150
             let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+            
             this.projectiles.push(newArrow)
-            this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0)
+            for (let i = 0; i < 5; i++) {
+                //this.projectiles.push(new Spark(arrowDestinationX, GameImage.perspectiveBottomY, -300, -29+(i*11.9)))
+            }
+            this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0 && e.alpha > 0)
         } else {
             console.log("hit by arrow")
             console.log (this.player.state.block)
         }
+        console.log(this.projectiles.length)
     }
     updatePerpective(){
         this.enemies.forEach((e) => {
@@ -221,7 +231,8 @@ class Game{
     }
 }
 
-class GameImage{
+
+class GameImage {
     static perpsectiveBaseWidth = 1000 
     static baseCenterX = canvas.width/2
     static perspectiveHeight = 800 
@@ -268,7 +279,7 @@ class GameImage{
         this.heightTraveled = 0;
         this.angle = 0
         this.alpha = 1
-        this.shadowAlpha = 0;
+        this.shadow = {};
         this.flipped = false;
         this.sway = 0;
         this.bounce = 0;
@@ -288,6 +299,14 @@ class GameImage{
         this.dh = this.percentTraveled * this.maxHeight
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX - this.dw/2
+        this.updateShadow();
+    }
+    updateShadow(){
+        let sizeMultiplier = 1 + -this.maxHeightOffset/500
+        sizeMultiplier = sizeMultiplier > 1 ? sizeMultiplier : 1
+        this.shadow.sizeMultiplier = sizeMultiplier
+        this.shadow.alpha = this.alpha * 1/Math.pow(sizeMultiplier,4)
+        
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -316,8 +335,8 @@ class GameImage{
         ctx.fillStyle = gradient
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
-        this.shadowAlpha = this.alpha * 1/Math.pow(sizeMulti,4)
-        ctx.globalAlpha = this.shadowAlpha 
+        this.shadow.alpha = this.alpha * 1/Math.pow(sizeMulti,4)
+        ctx.globalAlpha = this.shadow.alpha
         ctx.translate(-centerX, -centerY)
         ctx.fill();
         ctx.restore()
@@ -407,6 +426,11 @@ class BlockedArrow extends Projectile {
             40*0.5, 180*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), randomValue(0.05,0.08)*Math.sign(velX))
         this.gravity = 3
+        this.alpha = 0.1
+    }
+    update(){
+        super.update()
+        this.fadeAlpha(1/5)
     }
     drawShadow(){
         return
@@ -471,6 +495,24 @@ class BloodSpurt extends Projectile {
 }
 
 class Spark extends Projectile{
+    constructor(basePosX, basePosY, heightOffset, velX){
+        super('./images/spark.png',30,70,basePosX,basePosY,heightOffset+20,30, velX)
+        this.angle = this.initialAngle = Math.tan(this.velX/this.velY)
+        //this.velY *= randomSign()
+        this.gravity = 0
+        this.counter = 0;
+
+    }
+    update(){
+        super.update()
+        this.counter++
+        this.velX *= 0.5
+        this.velY *= 0.5 
+        if (this.counter > 5) {
+            this.fadeAlpha(-0.33)
+            this.dh *= 0.6
+        }
+    }
     
 }
 
@@ -543,7 +585,6 @@ class Crossbowman extends Enemy {
     }
     update(){
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
-        if (this.image.percentTraveled > 0.5 && this.state !== "dead") this.recieveAttack();
         this.bloodSpurts.forEach( e => {
             e.update()
         })
@@ -570,8 +611,9 @@ class Crossbowman extends Enemy {
         this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
+        if (this.state === "dead") return;
         this.state = "dead"
-        this.image.image.src = './images/gaurd_dead_nocrossbow.png'
+        this.image.imageSwap('./images/gaurd_dead_nocrossbow.png')
         const x = GameImage.baseCenterX + this.image.maxCenterOffset
         const y = this.image.baseY
         const heightOffset = -this.image.maxHeight/2 
@@ -760,11 +802,11 @@ class Player{
     setState(){
         this.state.block = false;
         this.state.attack = false;
-        if (this.block.frame > 30) this.state.block = 'd' 
-        else if (this.block.frame < 6) this.state.block = 'a' 
+        if (this.block.frame > 25) this.state.block = 'd' 
+        else if (this.block.frame < 11) this.state.block = 'a' 
         if (this.attack.isAttacking) this.state.block = false;
-        if (this.attack.frame > 18 && this.attack.frame < 23){
-            this.state.attack = this.attack.attackDirection
+        if (this.attack.frame > 15 && this.attack.frame < 20){
+            this.state.attack = this.attackDirection
         }
         
     }
