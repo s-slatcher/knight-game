@@ -207,9 +207,8 @@ class Game{
             else e.fadeAlpha(-0.1)
         })
         this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
-        this.scrollingElements = this.scrollingElements.filter((e) => {
-                return e.dy < this.height && !(e.dx+e.dw < 0 || e.dx > this.width)   
-            })
+        this.scrollingElements = this.scrollingElements.filter((e) => e.percentTraveled < 0.9)
+        console.log(this.scrollingElements.length)
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -239,7 +238,7 @@ class Game{
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
-        if (frameTime > 30) console.log(frameTime, "ms --- high frame time warning")
+        //if (frameTime > 30) console.log(frameTime, "ms --- high frame time warning")
         return framesDue;
     }
 }
@@ -305,21 +304,13 @@ class GameImage {
 
     moveWithPerspective(){
         this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        if (this.percentTraveled > 2) return;
+        if (this.percentTraveled > 1.25) return;
         const speed = this.maxSpeed * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
         this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX - this.dw/2
-        this.updateShadow();
-    }
-    updateShadow(){
-        let sizeMultiplier = 1 + -this.maxHeightOffset/500
-        sizeMultiplier = sizeMultiplier > 1 ? sizeMultiplier : 1
-        this.shadow.sizeMultiplier = sizeMultiplier
-        this.shadow.alpha = this.alpha * 1/Math.pow(sizeMultiplier,4)
-        
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
@@ -335,21 +326,24 @@ class GameImage {
         ctx.restore();
     }
     drawShadow(ctx){
+        if (this.percentTraveled > 1.25) return;
         const centerX = this.centerX
         const centerY = this.baseY - 10
         let sizeMulti = 1 + -this.maxHeightOffset/500
-        if (sizeMulti < 1) sizeMulti = 1;
+        if (sizeMulti < 1) sizeMulti = 1; 
+        const alpha = 0.5 * (1/(Math.pow(sizeMulti,2)))
         ctx.beginPath()
         ctx.arc(centerX,centerY,this.dw * sizeMulti,0,2*Math.PI);
         const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5 * sizeMulti, centerX, centerY, this.dw/1.5 * sizeMulti)
-        gradient.addColorStop(0, "rgba(0,0,0,0.5)")
+        gradient.addColorStop(0, `rgba(0,0,0,${alpha})`)
         gradient.addColorStop(1, "rgba(0,0,0,0)")
         ctx.save()
         ctx.fillStyle = gradient
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
-        this.shadow.alpha = this.alpha * 1/Math.pow(sizeMulti,4)
-        ctx.globalAlpha = this.shadow.alpha
+       
+
+        //ctx.globalAlpha = this.shadow.alpha
         ctx.translate(-centerX, -centerY)
         ctx.fill();
         ctx.restore()
