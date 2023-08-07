@@ -97,6 +97,7 @@ class Game{
         this.enemies = [];
         this.projectiles = [];
         this.scrollingElements = [];
+        this.firedArrows = []
         this.fpsSlider = document.getElementById("fps")
         //this.testBall = new Ball()
     }
@@ -111,8 +112,10 @@ class Game{
             this.handleEnemies();
             this.handleBackground();
             this.projectiles.forEach((e) => e.update())
+            this.projectiles = this.projectiles.filter((e)=>e.percentTraveled < 1.2)
             this.player.update(keyRecord, touchRecord)
             this.updatePerpective()
+            this.updateFiredArrows()
             this.draw(this.ctx);
             
         }
@@ -133,7 +136,7 @@ class Game{
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
         this.enemies.forEach((e)=> {
-            const inRange = e.image.percentTraveled > 0.65 && e.image.percentTraveled < 0.9
+            const inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
             if (inRange){
                 if (e.image.flipped && this.player.state.attack === 'd') e.recieveAttack();
                 if (!e.image.flipped && this.player.state.attack === 'a') e.recieveAttack();
@@ -162,26 +165,35 @@ class Game{
         
     }
     fireAtPlayer(enemy){
-        let velocityDirection = -1
-        let direction = 'a'
-        if (enemy.image.flipped){
-            velocityDirection = 1
-            direction = 'd'
-        }
-        if (this.player.state.block === direction) {
-            let arrowDestinationX = this.width/2 + velocityDirection*150
-            let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
-            
-            this.projectiles.push(newArrow)
-            for (let i = 0; i < 5; i++) {
-                //this.projectiles.push(new Spark(arrowDestinationX, GameImage.perspectiveBottomY, -300, -29+(i*11.9)))
+        const x = this.width/2 + enemy.image.maxCenterOffset
+        const y = enemy.image.baseY
+        const heightOffset = -enemy.image.maxHeight/2 
+        const arrow = new FiredArrow(x,y,heightOffset)
+        this.firedArrows.push(arrow)
+    
+    }
+    updateFiredArrows(){
+        this.firedArrows.forEach((e) => {
+            e.update()
+            if (e.percentTraveled > 0.8) {
+                e.markForDelete = true
+                let velocityDirection = -1;
+                let direction = 'a'
+                if (Math.sign(e.maxCenterOffset) > 0){
+                    velocityDirection = 1
+                    direction = 'd'
+                }
+                if (this.player.state.block === direction) {
+                    let arrowDestinationX = this.width/2 + velocityDirection*150
+                    let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+                    this.projectiles.push(newArrow)
+                    
+                } else {
+                    console.log("didnt block")
+                }
             }
-            this.projectiles = this.projectiles.filter( e => e.maxHeightOffset < 0 && e.alpha > 0)
-        } else {
-            console.log("hit by arrow")
-            console.log (this.player.state.block)
-        }
-        console.log(this.projectiles.length)
+        })
+        this.firedArrows = this.firedArrows.filter(e=>!(e.markForDelete))
     }
     updatePerpective(){
         this.enemies.forEach((e) => {
@@ -205,7 +217,8 @@ class Game{
         
         this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
-        this.projectiles.forEach((e)=>e.draw(ctx))                    
+        this.projectiles.forEach((e)=>e.draw(ctx))
+        this.firedArrows.forEach((e)=>e.draw(ctx))                    
         this.player.draw(ctx);
         
     }
@@ -423,14 +436,13 @@ class Projectile extends GameImage {
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
-            40*0.5, 180*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
+            40*0.5, 150*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), randomValue(0.05,0.08)*Math.sign(velX))
         this.gravity = 3
-        this.alpha = 0.1
+        this.alpha = 1
     }
     update(){
         super.update()
-        this.fadeAlpha(1/5)
     }
     drawShadow(){
         return
@@ -574,7 +586,6 @@ class Crossbowman extends Enemy {
         super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
-        this.firedArrows = [];
         this.deathCounter = 0;
         this.inSightOfTarget = false;
         this.States = { Unloaded: "unloaded",
@@ -588,26 +599,19 @@ class Crossbowman extends Enemy {
         this.bloodSpurts.forEach( e => {
             e.update()
         })
-        this.firedArrows.forEach( e => e.update())
+
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
         this.droppedCrossbows.forEach( e => {
             e.update()
         })
-        this.droppedCrossbows = this.droppedCrossbows.filter( e => e.alpha > 0)
-        this.firedArrows = this.firedArrows.filter( e => e.percentTraveled < 0.8)
-        
+        this.droppedCrossbows = this.droppedCrossbows.filter( e => e.percentTraveled < 1.1)
     }
     loadCrossbow(){
         this.state = "loaded"
         this.image.imageSwap('./images/gaurd_loaded.png')   
     }
-    attack(){
+    attack(){    
         this.state = "attacking"
-        const x = GameImage.baseCenterX + this.image.maxCenterOffset
-        const y = this.image.baseY
-        const heightOffset = -this.image.maxHeight/2 
-        const arrow = new FiredArrow(x,y,heightOffset)
-        this.firedArrows.push(arrow)
         this.image.imageSwap('./images/gaurd_nobolt.png')
     }
     recieveAttack(){
@@ -632,7 +636,6 @@ class Crossbowman extends Enemy {
         this.image.draw(ctx);
         this.droppedCrossbows.forEach( e =>  e.draw(ctx))
         this.bloodSpurts.forEach( e => e.draw(ctx))
-        this.firedArrows.forEach(e => e.draw(ctx))
     }
 }
 
@@ -802,8 +805,8 @@ class Player{
     setState(){
         this.state.block = false;
         this.state.attack = false;
-        if (this.block.frame > 25) this.state.block = 'd' 
-        else if (this.block.frame < 11) this.state.block = 'a' 
+        if (this.block.frame > 23) this.state.block = 'd' 
+        else if (this.block.frame < 12) this.state.block = 'a' 
         if (this.attack.isAttacking) this.state.block = false;
         if (this.attack.frame > 15 && this.attack.frame < 20){
             this.state.attack = this.attackDirection
