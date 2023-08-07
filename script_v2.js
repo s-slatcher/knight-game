@@ -207,7 +207,7 @@ class Game{
             else e.fadeAlpha(-0.1)
         })
         this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
-        this.scrollingElements = this.scrollingElements.filter((e) => e.percentTraveled < 0.9)
+        this.scrollingElements = this.scrollingElements.filter((e) => e.percentTraveled < 1)
         console.log(this.scrollingElements.length)
     }
     draw(ctx){
@@ -464,7 +464,7 @@ class FiredArrow extends Projectile {
 
 class Crossbow extends Projectile {
     constructor(basePosX, basePosY, heightOffset){
-        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY+40, heightOffset, 10, 0)
+        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY, heightOffset, 10, 0)
     }
     update(){
         super.update();
@@ -473,6 +473,9 @@ class Crossbow extends Projectile {
             this.velX = 0;
         }
         this.moveWithPerspective();
+    }
+    drawShadow(){
+        return;
     }
 }
 
@@ -580,7 +583,6 @@ class Crossbowman extends Enemy {
         super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
-        this.deathCounter = 0;
         this.inSightOfTarget = false;
         this.States = { Unloaded: "unloaded",
                         Loaded: "loaded",
