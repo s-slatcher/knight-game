@@ -186,6 +186,7 @@ class Game{
                 if (this.player.state.block === direction) {
                     let arrowDestinationX = this.width/2 + velocityDirection*150
                     let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+                    newArrow.sfx.play();
                     this.projectiles.push(newArrow)
                     
                 } else {
@@ -208,7 +209,7 @@ class Game{
         })
         this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
         this.scrollingElements = this.scrollingElements.filter((e) => e.percentTraveled < 1)
-        console.log(this.scrollingElements.length)
+        
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -434,6 +435,9 @@ class BlockedArrow extends Projectile {
             velX, 3.14*Math.sign(velX), randomValue(0.05,0.08)*Math.sign(velX))
         this.gravity = 3
         this.alpha = 1
+        this.sfx = new Audio()
+        this.sfx.src = `./sounds/clank/${Math.floor(Math.random()*5)}.wav`
+        this.sfx.volume = 0.1;
     }
     update(){
         super.update()
@@ -589,6 +593,15 @@ class Crossbowman extends Enemy {
                         Attacked: "attacked", 
                         Dead: "dead"}
         this.state = "unloaded"
+        this.loadSound = new Audio()
+        this.deathSound = new Audio()
+        this.bloodSound = new Audio()
+        this.loadSound.src = `./sounds/crossbow_load.ogg`
+        this.deathSound.src = `./sounds/death/${Math.floor(Math.random()*5)}.ogg`
+        this.bloodSound.src = `./sounds/gore/${Math.floor(Math.random()*3)}.wav`
+        this.loadSound.volume = 0.05
+        this.deathSound.volume = 0.4
+        this.bloodSound.volume = 0.3
     }
     update(){
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
@@ -605,6 +618,7 @@ class Crossbowman extends Enemy {
     loadCrossbow(){
         this.state = "loaded"
         this.image.imageSwap('./images/gaurd_loaded.png')   
+        this.loadSound.play();
     }
     attack(){    
         this.state = "attacking"
@@ -614,6 +628,8 @@ class Crossbowman extends Enemy {
         if (this.state === "dead") return;
         this.state = "dead"
         this.image.imageSwap('./images/gaurd_dead_nocrossbow.png')
+        this.deathSound.play();
+        this.bloodSound.play();
         const x = GameImage.baseCenterX + this.image.maxCenterOffset
         const y = this.image.baseY
         const heightOffset = -this.image.maxHeight/2 
