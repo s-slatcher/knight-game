@@ -599,8 +599,8 @@ class Crossbowman extends Enemy {
         this.loadSound.src = `./sounds/crossbow_load.ogg`
         this.deathSound.src = `./sounds/death/${Math.floor(Math.random()*5)}.ogg`
         this.bloodSound.src = `./sounds/gore/${Math.floor(Math.random()*3)}.wav`
-        this.loadSound.volume = 0.05
-        this.deathSound.volume = 0.4
+        this.loadSound.volume = 0.15
+        this.deathSound.volume = 0.3
         this.bloodSound.volume = 0.3
     }
     update(){
