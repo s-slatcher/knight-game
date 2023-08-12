@@ -71,17 +71,8 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
-class Input{
-    constructor(keyRecord, touchRecord){
-        this.keys = keyRecord
-        this.touchs = touchRecord
-    }
-}
-
-
-
 class Game{
-    constructor(ctx, width, height, player){
+    constructor(ctx, width, height, sprites){
         this.ctx = ctx;
         this.width = width;
         this.height = height;
@@ -93,13 +84,35 @@ class Game{
         this.enemiesDue = 4;
         this.totalFrames = 0;
         this.speedModifier = 1;
-        this.player = player
+        this.lanes = {left:0, middle:1, right:2}
+        this.player = new Player(this, sprites)
         this.enemies = [];
         this.projectiles = [];
         this.scrollingElements = [];
         this.firedArrows = []
         this.fpsSlider = document.getElementById("fps")
+        this.input;
         //this.testBall = new Ball()
+    }
+    handleInput(keyRecord, touchRecord){
+        let input = 'middle'
+        if (Object.keys(touchRecord).length === 0){
+            if (keyRecord.includes('a')) input = 'left'
+            if (keyRecord.includes('d')) input = 'right'
+            if (keyRecord.includes('a') && keyRecord.includes('d')) input = 'middle'
+            if (keyRecord.includes(' ')) input = 'attack'
+        } else {
+            const touch0 = touchRecord.touch0
+            const touch1 = touchRecord.touch1
+            const lastTouch = touch1 || touch0
+            const lastTouchX = lastTouch.x[lastTouch.x.length-1]
+            if (lastTouchX < window.innerWidth/3) input = 'left'
+            if (lastTouchX > window.innerWidth*(2/3)) input = 'right'
+            if (touchRecord.touch0 && touchRecord.touch1) input = 'middle'
+            if ((touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) ||
+                (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)) input = 'attack'
+        }
+        this.input = input;
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -108,12 +121,15 @@ class Game{
         }
         const framesDue = this.getFramesDue(timestamp)
         if (framesDue !== 0) {
+            this.handleInput(keyRecord, touchRecord);
+            //this.player.update_test(this.input)
+            this.player.update(keyRecord, touchRecord)
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
             this.projectiles.forEach((e) => e.update())
             this.projectiles = this.projectiles.filter((e)=>e.percentTraveled < 1.2)
-            this.player.update(keyRecord, touchRecord)
+            
             this.updatePerpective()
             this.updateFiredArrows()
             this.draw(this.ctx);
@@ -138,7 +154,7 @@ class Game{
         this.enemies.forEach((e)=> {
             const inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
             if (inRange){
-                if (e.image.flipped && this.player.state.attack === 'd') e.recieveAttack();
+                if (e.image.flipped && this.player.state.attack === 'd')e.recieveAttack(); 
                 if (!e.image.flipped && this.player.state.attack === 'a') e.recieveAttack();
             }
             if(e.image.percentTraveled > 0.4 && e.state === "loaded") {
@@ -190,7 +206,7 @@ class Game{
                     this.projectiles.push(newArrow)
                     
                 } else {
-                    console.log("didnt block")
+                    //console.log("didnt block")
                 }
             }
         })
@@ -587,7 +603,6 @@ class Crossbowman extends Enemy {
         super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
-        this.inSightOfTarget = false;
         this.States = { Unloaded: "unloaded",
                         Loaded: "loaded",
                         Attacked: "attacked", 
@@ -657,11 +672,128 @@ class Pikeman extends Enemy {
     }
 }
 
+class State{
+    constructor(state){
+        this.state = state
+    }
+    enter(){}
+    exit(){}
+    update(){}
+}
 
+class Blocking extends State {
+    constructor(player){
+        super("blocking")
+        this.player = player
+        this.sprite = this.player.block 
+        this.sprite.frame = 18;
+        this.sprite.updateSourceDimensions();
+        this.frameIncrement = 1;
+        this.frameQueue = [18];
+        this.positionInQueue = 0;
+        this.frameDestinations = {'middle':18, 'left':0, 'right':35} 
+        this.middleSkipRange = [12,26] 
+        this.earlyFramesToSkip = 5
+        this.inputDelayCounter = 0;
+        this.lastInput = 'middle'
+    }
+    enter(){
+        this.sprite.alpha = 0;
+    }
+    update(input){
+        this.player.attack.fadeAlpha(-0.25)
+        this.sprite.fadeAlpha(0.25)
+        if (input === 'attack'){
+            this.player.changeState("attacking")
+            return;
+        }
+        else if ( ! (Object.keys(this.frameDestinations).includes(input)) ) return;
+        if (--this.inputDelayCounter >= 0 || !this.frameDestinations[input]) input = this.lastInput
+        if (input !== this.lastInput) {
+            this.inputDelayCounter = 4;
+            this.makeFrameQueue(input)
+        }
+        this.lastInput = input;
+        if (this.positionInQueue !== this.frameQueue.length) this.sprite.frame = this.frameQueue[this.positionInQueue++]
+        this.sprite.updateSourceDimensions()
+        this.updateLane()
+    }
+    makeFrameQueue(input){
+        this.frameQueue = [];
+        this.positionInQueue = 0;
+        const frame = this.sprite.frame
+        let frameEnd = this.frameDestinations[input]; 
+        let increment = Math.sign(frameEnd-frame)
+        if (Object.values(this.frameDestinations).includes(frame)) {
+            frame += this.earlyFramesToSkip * increment
+        }
+        for (let i = frame + increment; i !== frameEnd + increment; i += increment){
+            sprite.frameQueue.push(i)
+        }
+        if(Math.abs(frame - frameEnd) > this.sprite.frames.length/2) {
+            this.frameQueue = this.frameQueue.filter((e) => e < this.middleSkipRange[0] || e > this.middleSkipRange[1])
+        }
+    }
+    updateLane(){
+        let lane = "middle"
+        if (this.sprite.frame > 23) lane = "right"
+        if (this.sprite.frame < 12) lane = "left"
+        this.player.activeLane = lane;
+    }
+}
+
+class Attacking extends State {
+    constructor(player){
+        super("attacking")
+        this.player = player
+        this.sprite = this.player.attack
+        this.sprite.frame = 0;
+        this.sprite.updateSourceDimensions();
+    }
+    enter(){
+        this.sprite.alpha = 0;
+        this.sprite.frame = 0;
+        this.sprite.updateSourceDimensions()
+    }
+    update(){
+        this.player.block.fadeAlpha(-0.25)
+        this.sprite.fadeAlpha(0.25)
+        const attack = this.sprite
+        if (attack.frame === 0) {
+            this.attackDirection = this.input;
+        }
+        attack.frame++;
+        if (attack.frame === attack.frames.length) {
+            this.player.changeState("blocking")
+        }
+        attack.updateSourceDimensions()
+        this.angleAttack();
+    }
+    angleAttack(){
+        let [angle,maxCenterOffset,maxHeightOffset] = this.sprite
+        angle = 0
+        maxCenterOffset = 0
+        maxHeightOffset = 300
+        if (this.player.activeLane === "right"){ 
+           angle = 1.35
+           maxHeightOffset = 80
+           maxCenterOffset = 30
+            
+        } else if (this.player.activeLane === "left") {
+            angle = -1.35
+            maxHeightOffset = 50
+            maxCenterOffset = -40
+        }  
+    }
+}
 class Player{
-    constructor(sprites){
-        this.health = 1;
+    constructor(game,sprites){
         this.block = sprites.block
+        this.attack = sprites.attack
+        this.game = game;
+        this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
+        this.activeLane = this.game.lanes["middle"]
+        this.activeState = this.states["blocking"]
         this.counter = 0;
             this.block.frame = 18;
             this.block.updateSourceDimensions();
@@ -674,15 +806,16 @@ class Player{
             this.block.inputDelayCounter = 0;
             this.sway = 0;
             this.bounce = 0;
-        this.attack = sprites.attack
+        
             this.attack.frame = 0;
             this.attack.updateSourceDimensions();
             this.attack.direction = 'none'
-            this.block.inputDelayCounter = 0;
+            
         this.input = 'none'
         this.attackInput = true;
         this.isAttacking = false;
         this.state = {block:false, attack:false}
+        this.health = 1;
     }
     readKeyboard(keyRecord){
         let newInput;
@@ -702,8 +835,8 @@ class Player{
         const lastTouch = touch1 || touch0
         const lastTouchX = lastTouch.x[lastTouch.x.length-1]
         let newInput = 'none'
-        if (lastTouchX < window.innerWidth/3) newInput = 'a'
-        if (lastTouchX > window.innerWidth*(2/3)) newInput = 'd'
+        if (lastTouchX < window.innerWidth*(3/7)) newInput = 'a'
+        if (lastTouchX > window.innerWidth*(4/7)) newInput = 'd'
         if (touchRecord.touch0 && touchRecord.touch1) newInput = 'none'
         this.input = newInput
         if (touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) this.attackTransition();
@@ -801,25 +934,19 @@ class Player{
             attack.angle = -1.35
             attack.maxHeightOffset = 50
             attack.maxCenterOffset = -40
-        } else {
-            
-        }
-        //ctx.translate(-this.attack.centerX, -this.attack.baseY)
-        
-        
+        }  
     }
-    takeDamage(damage){
-        this.health -= damage
-    }
-    heal(damage){
-
+    changeState(state){
+        this.activeState.exit();
+        this.activeState = this.states[state]
+        this.activeState.enter();
     }
     setState(){
         this.state.block = false;
         this.state.attack = false;
         if (this.block.frame > 23) this.state.block = 'd' 
         else if (this.block.frame < 12) this.state.block = 'a' 
-        if (this.attack.isAttacking) this.state.block = false;
+        if (this.isAttacking) this.state.block = false;
         if (this.attack.frame > 15 && this.attack.frame < 20){
             this.state.attack = this.attackDirection
         }
@@ -835,12 +962,11 @@ async function fetchSprites(){
         fetch("./sword48.json")])
     await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8, 200));
     await blockRep.json().then((sprite) => sprites.block = new Sprite(sprite, 842, 609));
-    const player = new Player(sprites)
-    startGame(player);
+    startGame(sprites);
 };
 
-function startGame(player){ 
-    const game = new Game(ctx, canvas.width, canvas.height, player)
+function startGame(sprites){ 
+    const game = new Game(ctx, canvas.width, canvas.height, sprites)
     animate(0,game);  
 }
 function animate(timestamp, game){
