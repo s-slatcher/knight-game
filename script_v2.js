@@ -95,6 +95,9 @@ class Game{
         //this.testBall = new Ball()
     }
     handleInput(keyRecord, touchRecord){
+        if (keyRecord.includes('a') && keyRecord.includes('b') && keyRecord.includes('c')){
+            alert("cheats activated")
+        }
         let input = 'middle'
         if (Object.keys(touchRecord).length === 0){
             if (keyRecord.includes('a')) input = 'left'
@@ -123,7 +126,7 @@ class Game{
         if (framesDue !== 0) {
             this.handleInput(keyRecord, touchRecord);
             //this.player.update_test(this.input)
-            this.player.update(keyRecord, touchRecord)
+            this.player.update(this.input)
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
@@ -131,7 +134,6 @@ class Game{
             this.projectiles = this.projectiles.filter((e)=>e.percentTraveled < 1.2)
             
             this.updatePerpective()
-            this.updateFiredArrows()
             this.draw(this.ctx);
             
         }
@@ -152,22 +154,14 @@ class Game{
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
         this.enemies.forEach((e)=> {
-            const inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
-            if (inRange){
-                if (e.image.flipped && this.player.state.attack === 'd')e.recieveAttack(); 
-                if (!e.image.flipped && this.player.state.attack === 'a') e.recieveAttack();
-            }
-            if(e.image.percentTraveled > 0.4 && e.state === "loaded") {
-                e.attack();
-                this.fireAtPlayer(e);
-            }
+            
             e.update()
         });
     }
     spawnCrossbowWave() {
         let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
         if (this.enemiesDue > 0) {
-            const newEnemy = new Crossbowman(this.width/2 - 500*roadSide)
+            const newEnemy = new Crossbowman(this, this.width/2 - 500*roadSide)
             newEnemy.image.alpha = 0;
             if (roadSide === -1) newEnemy.image.flipped = true;
             this.enemies.unshift(newEnemy)
@@ -180,38 +174,8 @@ class Game{
         }
         
     }
-    fireAtPlayer(enemy){
-        const x = this.width/2 + enemy.image.maxCenterOffset
-        const y = enemy.image.baseY
-        const heightOffset = -enemy.image.maxHeight/2 
-        const arrow = new FiredArrow(x,y,heightOffset)
-        this.firedArrows.push(arrow)
     
-    }
-    updateFiredArrows(){
-        this.firedArrows.forEach((e) => {
-            e.update()
-            if (e.percentTraveled > 0.8) {
-                e.markForDelete = true
-                let velocityDirection = -1;
-                let direction = 'a'
-                if (Math.sign(e.maxCenterOffset) > 0){
-                    velocityDirection = 1
-                    direction = 'd'
-                }
-                if (this.player.state.block === direction) {
-                    let arrowDestinationX = this.width/2 + velocityDirection*150
-                    let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
-                    newArrow.sfx.play();
-                    this.projectiles.push(newArrow)
-                    
-                } else {
-                    //console.log("didnt block")
-                }
-            }
-        })
-        this.firedArrows = this.firedArrows.filter(e=>!(e.markForDelete))
-    }
+    
     updatePerpective(){
         this.enemies.forEach((e) => {
             e.image.moveWithPerspective()
@@ -233,8 +197,7 @@ class Game{
         
         this.scrollingElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach((e) => e.draw(ctx))
-        this.projectiles.forEach((e)=>e.draw(ctx))
-        this.firedArrows.forEach((e)=>e.draw(ctx))                    
+        this.projectiles.forEach((e)=>e.draw(ctx))                    
         this.player.draw(ctx);
         
     }
@@ -321,7 +284,7 @@ class GameImage {
 
     moveWithPerspective(){
         this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
-        if (this.percentTraveled > 1.25) return;
+        if (this.percentTraveled > 1.5) return;
         const speed = this.maxSpeed * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         this.dw = this.percentTraveled * this.maxWidth
@@ -358,9 +321,6 @@ class GameImage {
         ctx.fillStyle = gradient
         ctx.translate(centerX, centerY)
         ctx.scale(1,0.3)
-       
-
-        //ctx.globalAlpha = this.shadow.alpha
         ctx.translate(-centerX, -centerY)
         ctx.fill();
         ctx.restore()
@@ -381,13 +341,6 @@ class GameImage {
         if (alpha > 1) alpha = 1;
         if (alpha < 0) alpha = 0;
         this.alpha = alpha;
-    }
-    fadeShadowAlpha(increment){
-        if (increment === 0) return;
-        let alpha = this.shadowAlpha + increment
-        if (alpha > 1) alpha = 1;
-        if (alpha < 0) alpha = 0;
-        this.shadowAlpha = alpha;
     }
     imageSwap(imageSrc){
         const newImage = new Image()
@@ -435,7 +388,7 @@ class Projectile extends GameImage {
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
         this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in perspective)
-        
+        this.markForDelete = false;
     }
     update(){
         this.maxCenterOffset += this.velX
@@ -454,9 +407,6 @@ class BlockedArrow extends Projectile {
         this.sfx = new Audio()
         this.sfx.src = `./sounds/clank/${Math.floor(Math.random()*5)}.wav`
         this.sfx.volume = 0.1;
-    }
-    update(){
-        super.update()
     }
     drawShadow(){
         return
@@ -523,28 +473,6 @@ class BloodSpurt extends Projectile {
     
 }
 
-class Spark extends Projectile{
-    constructor(basePosX, basePosY, heightOffset, velX){
-        super('./images/spark.png',30,70,basePosX,basePosY,heightOffset+20,30, velX)
-        this.angle = this.initialAngle = Math.tan(this.velX/this.velY)
-        //this.velY *= randomSign()
-        this.gravity = 0
-        this.counter = 0;
-
-    }
-    update(){
-        super.update()
-        this.counter++
-        this.velX *= 0.5
-        this.velY *= 0.5 
-        if (this.counter > 5) {
-            this.fadeAlpha(-0.33)
-            this.dh *= 0.6
-        }
-    }
-    
-}
-
 class Ball extends Projectile {
     constructor(){
         super(`./images/football.png`,120,120,
@@ -591,23 +519,26 @@ class Ball extends Projectile {
 
 
 class Enemy{
-    constructor(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
+    constructor(game, baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
         this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
-        
+        this.game = game
     }
     
 }
 
 class Crossbowman extends Enemy {
-    constructor(basePosX, basePosY){
-        super('./images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
+    constructor(game, basePosX, basePosY){
+        super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
+        this.firedArrows = [];
+        this.blockedArrows = [];//note to self: may have to store projectiles in class as static value, so i can draw them all at once after enemy calls
         this.States = { Unloaded: "unloaded",
                         Loaded: "loaded",
                         Attacked: "attacked", 
                         Dead: "dead"}
         this.state = "unloaded"
+        this.lane = this.image.maxCenterOffset < 0 ? "left" : "right"
         this.loadSound = new Audio()
         this.deathSound = new Audio()
         this.bloodSound = new Audio()
@@ -620,14 +551,16 @@ class Crossbowman extends Enemy {
     }
     update(){
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
+        if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
+        this.updateFiredArrows();
         this.bloodSpurts.forEach( e => {
             e.update()
         })
 
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
-        this.droppedCrossbows.forEach( e => {
-            e.update()
-        })
+        this.droppedCrossbows.forEach( e => e.update())
+        this.blockedArrows.forEach(e => e.update())
+        this.blockedArrows = this.blockedArrows.filter((e)=>e.percentTraveled < 1.2)
         this.droppedCrossbows = this.droppedCrossbows.filter( e => e.percentTraveled < 1.1)
     }
     loadCrossbow(){
@@ -638,8 +571,13 @@ class Crossbowman extends Enemy {
     attack(){    
         this.state = "attacking"
         this.image.imageSwap('./images/gaurd_nobolt.png')
+        const x = this.game.width/2 + this.image.maxCenterOffset
+        const y = this.image.baseY
+        const heightOffset = -this.image.maxHeight/2 
+        const arrow = new FiredArrow(x,y,heightOffset)
+        this.firedArrows.push(arrow)
     }
-    recieveAttack(){
+    receiveAttack(){
         if (this.state === "dead") return;
         this.state = "dead"
         this.image.imageSwap('./images/gaurd_dead_nocrossbow.png')
@@ -652,23 +590,77 @@ class Crossbowman extends Enemy {
         crossbow.flipped = this.image.flipped
         this.droppedCrossbows.push(crossbow)
         for (let index = 0; index < 60; index++) {
-            this.bloodSpurts.push(new BloodSpurt(x, y, heightOffset))
-            
+            this.bloodSpurts.push(new BloodSpurt(x, y, heightOffset))    
         }
-        
-        
-        
+    }
+    updateFiredArrows(){
+        this.firedArrows.forEach((e) => {
+            const player = this.game.player
+            e.update()
+            if (e.percentTraveled > 0.8 &&
+                player.lane === this.lane &&
+                player.state === player.states["blocking"]) {
+                let velocityDirection = -Math.sign(e.velX)
+                let arrowDestinationX = this.game.width/2 + velocityDirection*150
+                let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+                newArrow.sfx.play();
+                this.blockedArrows.push(newArrow)
+                e.markForDelete = true
+            } 
+            if (e.percentTraveled > 0.9){
+                e.markForDelete = true
+            }
+            
+        })
+        this.firedArrows = this.firedArrows.filter(e=>!(e.markForDelete))
     }
     draw(ctx){
         this.image.draw(ctx);
         this.droppedCrossbows.forEach( e =>  e.draw(ctx))
         this.bloodSpurts.forEach( e => e.draw(ctx))
+        this.firedArrows.forEach((e)=>e.draw(ctx))
+        this.blockedArrows.forEach((e)=>e.draw(ctx)) 
     }
 }
 
 class Pikeman extends Enemy {
     constructor(posX){
         //super()
+    }
+}
+
+class Player{
+    constructor(game,sprites){
+        this.block = sprites.block
+        this.attack = sprites.attack
+        this.block.alpha = 0;
+        this.attack.alpha = 0;
+        this.game = game;
+        this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
+        this.lane = this.game.lanes["middle"]
+        this.state = this.states.blocking;
+        this.isAttacking = false;
+    }
+    update(input){
+        this.state.update(input);
+    }
+    draw(ctx){
+        this.attack.draw(ctx)
+        this.block.draw(ctx)
+    }
+    updateBounceSway() {
+        this.counter ++;
+        let bounceModifier = Math.sin(this.counter / 7.5) * 15;
+        let swayModifier = Math.cos(this.counter / 15) * 10;
+        if (bounceModifier > 0) bounceModifier *= -1;
+        if (swayModifier > 0) swayModifier *= -1;
+        this.block.sway = this.attack.sway = swayModifier;
+        this.block.bounce = this.attack.bounce = bounceModifier;
+    }
+    changeState(state){
+        this.state.exit();
+        this.state = this.states[state]
+        this.state.enter();
     }
 }
 
@@ -700,18 +692,23 @@ class Blocking extends State {
     enter(){
         this.sprite.alpha = 0;
     }
+    exit(){
+        this.inputDelayCounter = 0;
+        this.updateLane();
+    }
     update(input){
-        this.player.attack.fadeAlpha(-0.25)
-        this.sprite.fadeAlpha(0.25)
+        this.player.attack.fadeAlpha(-0.2)
+        this.sprite.fadeAlpha(0.2)
         if (input === 'attack'){
             this.player.changeState("attacking")
             return;
         }
         else if ( ! (Object.keys(this.frameDestinations).includes(input)) ) return;
-        if (--this.inputDelayCounter >= 0 || !this.frameDestinations[input]) input = this.lastInput
+        if (--this.inputDelayCounter >= 0 || this.frameDestinations[input] === undefined) input = this.lastInput
         if (input !== this.lastInput) {
             this.inputDelayCounter = 4;
             this.makeFrameQueue(input)
+            
         }
         this.lastInput = input;
         if (this.positionInQueue !== this.frameQueue.length) this.sprite.frame = this.frameQueue[this.positionInQueue++]
@@ -721,24 +718,25 @@ class Blocking extends State {
     makeFrameQueue(input){
         this.frameQueue = [];
         this.positionInQueue = 0;
-        const frame = this.sprite.frame
-        let frameEnd = this.frameDestinations[input]; 
-        let increment = Math.sign(frameEnd-frame)
+        let frame = this.sprite.frame
+        const frameEnd = this.frameDestinations[input]; 
+        const increment = Math.sign(frameEnd-frame)
         if (Object.values(this.frameDestinations).includes(frame)) {
             frame += this.earlyFramesToSkip * increment
         }
         for (let i = frame + increment; i !== frameEnd + increment; i += increment){
-            sprite.frameQueue.push(i)
+            this.frameQueue.push(i)
         }
         if(Math.abs(frame - frameEnd) > this.sprite.frames.length/2) {
             this.frameQueue = this.frameQueue.filter((e) => e < this.middleSkipRange[0] || e > this.middleSkipRange[1])
         }
     }
     updateLane(){
+        if (this.inputDelayCounter > 0) return
         let lane = "middle"
         if (this.sprite.frame > 23) lane = "right"
         if (this.sprite.frame < 12) lane = "left"
-        this.player.activeLane = lane;
+        this.player.lane = lane;
     }
 }
 
@@ -747,8 +745,8 @@ class Attacking extends State {
         super("attacking")
         this.player = player
         this.sprite = this.player.attack
-        this.sprite.frame = 0;
-        this.sprite.updateSourceDimensions();
+        this.activeFrameRange = [15,20]
+        this.game = this.player.game
     }
     enter(){
         this.sprite.alpha = 0;
@@ -756,204 +754,51 @@ class Attacking extends State {
         this.sprite.updateSourceDimensions()
     }
     update(){
-        this.player.block.fadeAlpha(-0.25)
-        this.sprite.fadeAlpha(0.25)
+        this.player.block.fadeAlpha(-0.2)
+        this.sprite.fadeAlpha(0.2)
+        this.checkCollision();
         const attack = this.sprite
         if (attack.frame === 0) {
             this.attackDirection = this.input;
         }
         attack.frame++;
-        if (attack.frame === attack.frames.length) {
+        
+        if (attack.frame === attack.frames.length-1) {
             this.player.changeState("blocking")
         }
         attack.updateSourceDimensions()
         this.angleAttack();
     }
+    checkCollision(){
+        if (this.sprite.frame < this.activeFrameRange[0] || 
+            this.sprite.frame > this.activeFrameRange[1]) return;
+        this.game.enemies.forEach((e)=>{
+            let inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
+            if (inRange && e.lane === this.player.lane){
+                e.receiveAttack();
+            } else if (inRange){
+                console.log(e.lane)
+                console.log(this.player.lane)
+            }
+        })
+    }
     angleAttack(){
-        let [angle,maxCenterOffset,maxHeightOffset] = this.sprite
-        angle = 0
-        maxCenterOffset = 0
-        maxHeightOffset = 300
-        if (this.player.activeLane === "right"){ 
-           angle = 1.35
-           maxHeightOffset = 80
-           maxCenterOffset = 30
+        const sprite = this.sprite
+        sprite.angle = 0
+        sprite.maxCenterOffset = 0
+        sprite.maxHeightOffset = 300
+        if (this.player.lane === "right"){ 
+            sprite.angle = 1.35
+            sprite.maxHeightOffset = 80
+            sprite.maxCenterOffset = 30
             
-        } else if (this.player.activeLane === "left") {
-            angle = -1.35
-            maxHeightOffset = 50
-            maxCenterOffset = -40
+        } else if (this.player.lane === "left") {
+            sprite.angle = -1.35
+            sprite.maxHeightOffset = 50
+            sprite.maxCenterOffset = -40
         }  
     }
 }
-class Player{
-    constructor(game,sprites){
-        this.block = sprites.block
-        this.attack = sprites.attack
-        this.game = game;
-        this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
-        this.activeLane = this.game.lanes["middle"]
-        this.activeState = this.states["blocking"]
-        this.counter = 0;
-            this.block.frame = 18;
-            this.block.updateSourceDimensions();
-            this.block.frameIncrement = 1;
-            this.block.frameQueue = [18];
-            this.block.positionInQueue = 0;
-            this.block.frameDestinations = {'none':18, 'a':0, 'd':35} 
-            this.block.middleSkipRange = [12,26] 
-            this.block.earlyFramesToSkip = 5
-            this.block.inputDelayCounter = 0;
-            this.sway = 0;
-            this.bounce = 0;
-        
-            this.attack.frame = 0;
-            this.attack.updateSourceDimensions();
-            this.attack.direction = 'none'
-            
-        this.input = 'none'
-        this.attackInput = true;
-        this.isAttacking = false;
-        this.state = {block:false, attack:false}
-        this.health = 1;
-    }
-    readKeyboard(keyRecord){
-        let newInput;
-        if (keyRecord.length === 0) this.input = 'none'
-        else if (!keyRecord.includes(this.Input)){
-            newInput = 'none'
-            if (keyRecord.includes('a')) newInput = 'a'
-            if (keyRecord.includes('d')) newInput = 'd'
-            this.input = newInput;
-        }
-        if(keyRecord.includes(" ")) this.attackTransition()   
-    }
-    readTouch(touchRecord){
-        if (Object.keys(touchRecord).length === 0) return;
-        const touch0 = touchRecord.touch0
-        const touch1 = touchRecord.touch1
-        const lastTouch = touch1 || touch0
-        const lastTouchX = lastTouch.x[lastTouch.x.length-1]
-        let newInput = 'none'
-        if (lastTouchX < window.innerWidth*(3/7)) newInput = 'a'
-        if (lastTouchX > window.innerWidth*(4/7)) newInput = 'd'
-        if (touchRecord.touch0 && touchRecord.touch1) newInput = 'none'
-        this.input = newInput
-        if (touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) this.attackTransition();
-        else if (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)  this.attackTransition();
-    }
-    update(keyRecord, touchRecord){
-        this.readKeyboard(keyRecord)
-        this.readTouch(touchRecord)
-        this.updateBounceSway()
-        this.isAttacking ? this.updateAttack() : this.updateBlock();
-        this.setState();
-    }
-    draw(ctx){
-        if (this.isAttacking) {
-            ctx.save()
-            this.directAttack(ctx)
-            this.attack.draw(ctx)
-            ctx.restore();
-            this.block.fadeAlpha(-0.2)
-        } else {
-            this.block.fadeAlpha(0.2);
-            this.attack.alpha = 0;
-        }
-        this.block.draw(ctx);
-        
-    }
-    attackTransition(){
-        this.isAttacking = true;
-        
-    }
-    updateAttack(){
-        const attack = this.attack
-        if (attack.frame === 0) {
-            this.attackDirection = this.input;
-        }
-        attack.frame++;
-        if (attack.frame < 10) attack.fadeAlpha(0.2)
-        if(attack.frame > 20) attack.fadeAlpha(-0.2)
-        if (attack.frame === attack.frames.length) {
-            attack.frame = 0; 
-            this.isAttacking = false;
-        }
-
-        attack.updateSourceDimensions()
-    };
-    updateBlock(){
-        const block = this.block;
-        if (--block.inputDelayCounter >= 0) this.input = block.oldInput
-        if (this.input !== block.oldInput) {
-            block.inputDelayCounter = 4;
-            this.makeFrameQueue(block, this.input)
-        }
-        block.oldInput = this.input;
-        if (block.positionInQueue !== block.frameQueue.length) block.frame = block.frameQueue[block.positionInQueue++]
-        block.updateSourceDimensions()
-    }
-    makeFrameQueue(sprite, newInput){
-        sprite.frameQueue = [];
-        sprite.positionInQueue = 0;
-        let frameEnd = sprite.frameDestinations[newInput]; 
-        let increment = Math.sign(frameEnd-sprite.frame)
-        if (Object.values(sprite.frameDestinations).includes(sprite.frame)) {
-            sprite.frame += sprite.earlyFramesToSkip * increment
-        }
-        for (let i = sprite.frame + increment; i !== frameEnd + increment; i += increment){
-            sprite.frameQueue.push(i)
-        }
-        if(Math.abs(sprite.frame - frameEnd) > sprite.frames.length/2) {
-            sprite.frameQueue = sprite.frameQueue.filter((e) => e < sprite.middleSkipRange[0] || e > sprite.middleSkipRange[1])
-        }
-        
-    }
-    updateBounceSway() {
-        this.counter ++;
-        let bounceModifier = Math.sin(this.counter / 7.5) * 15;
-        let swayModifier = Math.cos(this.counter / 15) * 10;
-        if (bounceModifier > 0) bounceModifier *= -1;
-        if (swayModifier > 0) swayModifier *= -1;
-        this.block.sway = this.attack.sway = swayModifier;
-        this.block.bounce = this.attack.bounce = bounceModifier;
-    }
-    directAttack(){
-        const attack = this.attack;
-        //ctx.translate(this.attack.centerX, this.attack.baseY)
-        attack.angle = 0;
-        attack.maxCenterOffset = 0
-        attack.maxHeightOffset = 300
-        //attack.maxHeightOffset = 0
-        if (this.attackDirection === 'd'){ 
-           attack.angle = 1.35
-           attack.maxHeightOffset = 80
-           attack.maxCenterOffset = 30
-            
-        } else if (this.attackDirection === 'a') {
-            attack.angle = -1.35
-            attack.maxHeightOffset = 50
-            attack.maxCenterOffset = -40
-        }  
-    }
-    changeState(state){
-        this.activeState.exit();
-        this.activeState = this.states[state]
-        this.activeState.enter();
-    }
-    setState(){
-        this.state.block = false;
-        this.state.attack = false;
-        if (this.block.frame > 23) this.state.block = 'd' 
-        else if (this.block.frame < 12) this.state.block = 'a' 
-        if (this.isAttacking) this.state.block = false;
-        if (this.attack.frame > 15 && this.attack.frame < 20){
-            this.state.attack = this.attackDirection
-        }
-        
-    }
-}
-
 
 async function fetchSprites(){
     let sprites = {}
