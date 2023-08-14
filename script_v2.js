@@ -18,6 +18,9 @@ canvas.style.aspectRatio = 1/1
 
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
+const twoPointDistance = (coords1, coords2) => {
+    return Math.sqrt(Math.pow((coords2[0]-coords1[0]),2) + Math.pow((coords2[1]-coords1[1]),2))
+}
 
 startButton.addEventListener('click',() => {
     fetchSprites();
@@ -71,6 +74,43 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
+class UI {
+    constructor(game){
+        this.game = game;
+        this.marginY = 60
+        this.coinIconX = this.game.width/10
+        this.actualHealth = 1
+        this.targetHealth = 1
+        this.actualScore = 0
+        this.targetScore = 0
+        this.actualCombo = 0
+        this.targetCombo = 0
+        this.font = "80px Lugrasimo"
+        this.coinProjectiles = [];
+        
+    }    
+    update(health, score, combo){
+        this.targetHealth = health
+        this.targetScore = score
+        this.targetCombo = combo
+        this.coinProjectiles.forEach(e=> {
+            e.update()
+        })
+
+    }
+    draw(ctx){
+        ctx.font = this.font
+        ctx.fillStyle = "red"
+        ctx.fillRect(400,60,200*this.health,40)
+        this.coinProjectiles.forEach(e=>e.draw(ctx))
+    }
+    spawnCoin(basePosX,basePosY,heightOffset){
+        this.coinProjectiles.push(new Coin(basePosX,basePosY,heightOffset,this.coinIconX,this.marginY+20))
+    }
+    
+    
+}
+
 class Game{
     constructor(ctx, width, height, sprites){
         this.ctx = ctx;
@@ -86,6 +126,8 @@ class Game{
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, sprites)
+        this.UI = new UI(this)
+        this.health = 1;
         this.enemies = [];
         this.backgroundElements = [];
         this.fpsSlider = document.getElementById("fps")
@@ -123,13 +165,12 @@ class Game{
         const framesDue = this.getFramesDue(timestamp)
         if (framesDue !== 0) {
             this.handleInput(keyRecord, touchRecord);
+            this.UI.update(this.health)
             this.player.update(this.input)
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
-            
             this.draw(this.ctx);
-            
         }
         
     }
@@ -176,6 +217,7 @@ class Game{
         this.backgroundElements.forEach((e) => e.draw(ctx))
         this.enemies.forEach(e => e.draw(ctx))
         this.player.draw(ctx)
+        this.UI.draw(ctx);
     }
     drawStaticBackground(ctx){  //replace this image so im not making a new gradient every frame
         const gradient = ctx.createLinearGradient(0,0,0,200)
@@ -198,7 +240,7 @@ class Game{
 class SoundEffect {
     constructor(fileSrc, volume){
         this.sound = new Audio()
-        this.sound.onload = (e) => {e.volume = volume}
+        this.sound.volume = volume
         this.sound.src = fileSrc
     }
     play(){
@@ -364,7 +406,7 @@ class Sprite extends GameImage{
 }
 
 class Projectile extends GameImage {
-    constructor(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset, velTotal, velX, initialAngle=0, rotationSpeed=0){
+    constructor(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset, velTotal=0, velX=0, initialAngle=0, rotationSpeed=0){
         super(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset)
         this.velTotal = velTotal
         this.velX = velX
@@ -458,6 +500,31 @@ class BloodSpurt extends Projectile {
     
 }
 
+class Coin extends Projectile{
+    constructor(x,y,heightOffset,targetX, targetY){
+        super(`./images/coin.png`,55*0.6,42*0.6,x+randomValue(-10,10),y,heightOffset+randomValue(-10,10),0,0,randomValue(0,2),0)
+        this.targetX = targetX + randomValue(-80,80)
+        this.targetY = targetY
+        this.velY = (y - this.targetY)/100
+        this.velX = (this.targetX - x)/100
+        this.acceleration = randomValue(1.02,1.03)
+        this.rotationSpeed = this.acceleration-1 
+        this.XYratio = this.velX / this.velY
+        this.gravity = 0
+    }
+    update(){
+        super.update();
+        this.velY *= this.acceleration
+        this.velX *= this.acceleration
+        if (this.centerY-this.targetY < 100) {
+            this.fadeAlpha(-0.25) 
+        }
+    }
+    drawShadow(){
+        return;
+    }
+}
+
 class Ball extends Projectile {
     constructor(){
         super(`./images/football.png`,120,120,
@@ -508,6 +575,16 @@ class Enemy{
         this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
         this.game = game
         this.markedForDel = false;
+        this.sfx = {coinJingle:new SoundEffect(`./sounds/coin_jingle.wav`,0.1)}
+    }
+    spawnCoins(amount){
+        const x = this.game.width/2 + this.image.maxCenterOffset
+        const y = this.image.baseY
+        const heightOffset = -this.image.maxHeight/2 
+        for (let i = 0; i < amount; i++) {
+           this.game.UI.spawnCoin(x,y,heightOffset) 
+        } 
+        setTimeout(()=>(this.sfx.coinJingle.play()),500)
     }
     
 }
@@ -526,10 +603,10 @@ class Crossbowman extends Enemy {
                         Dead: "dead"}
         this.state = "unloaded"
         this.lane = this.image.maxCenterOffset < 0 ? "left" : "right"
-        this.sfx = {load: new SoundEffect (`./sounds/crossbow_load.ogg`,0.15),
-            death: new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3),
-            death2: new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3),
-            blocked: new SoundEffect(`./sounds/clank/${Math.floor(Math.random()*5)}.wav`,0.2) }
+        this.sfx.load = new SoundEffect (`./sounds/crossbow_load.ogg`,0.15)
+        this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
+        this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
+        this.sfx.blocked = new SoundEffect(`./sounds/clank/${Math.floor(Math.random()*5)}.wav`,0.2) 
        
     }
     update(){
@@ -575,25 +652,26 @@ class Crossbowman extends Enemy {
         for (let index = 0; index < 60; index++) {
             this.bloodSpurts.push(new BloodSpurt(x, y, heightOffset))    
         }
+        this.spawnCoins(5)
     }
     updateFiredArrows(){
         this.firedArrows.forEach((e) => {
             const player = this.game.player
             e.update()
-            if (e.percentTraveled > 0.8 &&
-                player.lane === this.lane &&
-                player.state === player.states["blocking"]) {
-                let velocityDirection = -Math.sign(e.velX)
-                let arrowDestinationX = this.game.width/2 + velocityDirection*150
-                let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
-                this.sfx.blocked.play();
-                this.blockedArrows.push(newArrow)
-                e.markedForDel = true
-            } 
-            if (e.percentTraveled > 0.9){
-                e.markedForDel = true
+            if (e.percentTraveled > 0.8){
+                e.markedForDel = true;
+                if (player.lane === this.lane &&
+                    player.state === player.states["blocking"]){
+                    let velocityDirection = -Math.sign(e.velX)
+                    let arrowDestinationX = this.game.width/2 + velocityDirection*150
+                    let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
+                    this.sfx.blocked.play();
+                    this.blockedArrows.push(newArrow)
+                } else {
+                    this.game.health -= 0.1
+                }
             }
-            
+        
         })
         this.firedArrows = this.firedArrows.filter(e=>!(e.markedForDel))
     }
