@@ -87,9 +87,7 @@ class Game{
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, sprites)
         this.enemies = [];
-        this.projectiles = [];
-        this.scrollingElements = [];
-        this.firedArrows = []
+        this.backgroundElements = [];
         this.fpsSlider = document.getElementById("fps")
         this.input;
         //this.testBall = new Ball()
@@ -125,38 +123,37 @@ class Game{
         const framesDue = this.getFramesDue(timestamp)
         if (framesDue !== 0) {
             this.handleInput(keyRecord, touchRecord);
-            //this.player.update_test(this.input)
             this.player.update(this.input)
             this.totalFrames++;
             this.handleEnemies();
             this.handleBackground();
-            this.projectiles.forEach((e) => e.update())
-            this.projectiles = this.projectiles.filter((e)=>e.percentTraveled < 1.2)
             
-            this.updatePerpective()
             this.draw(this.ctx);
             
         }
+        
     }
     handleBackground(){
         if (this.totalFrames % 32/this.speedModifier === 0) {
-            let scale = 1.5
-            let centerX = this.width/2
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX+1000,undefined,40)) 
-            this.scrollingElements.unshift(new GameImage("./images/tree.png",643*scale,921*scale,centerX-1000,undefined,40))
-            this.scrollingElements[0].alpha = 0;
-            this.scrollingElements[0].flipped = true;
-            this.scrollingElements[1].alpha = 0;    
+            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,undefined,40)) 
+            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,undefined,40))
+            this.backgroundElements[0].alpha = 0;
+            this.backgroundElements[0].flipped = true;
+            this.backgroundElements[1].alpha = 0;    
         }
+        this.backgroundElements = this.backgroundElements.filter( e => {
+            e.update();
+            return !(e.percentTraveled>1)
+        })
     }
     handleEnemies(){
         let center = this.width/2
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
-        this.enemies.forEach((e)=> {
-            
-            e.update()
-        });
+        this.enemies = this.enemies.filter( e => {
+            e.update();
+            return !e.markedForDel
+        })
     }
     spawnCrossbowWave() {
         let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
@@ -171,45 +168,21 @@ class Game{
         } else {
             this.crossbowmanDelay += 200
             this.enemiesDue = 4
-        }
-        
-    }
-    
-    
-    updatePerpective(){
-        this.enemies.forEach((e) => {
-            e.image.moveWithPerspective()
-            if (e.image.percentTraveled < 1) e.image.fadeAlpha(0.1)
-            else e.image.fadeAlpha(-0.1)
-        })
-        this.scrollingElements.forEach((e) => {
-            e.moveWithPerspective()
-            if (e.percentTraveled < 1) e.fadeAlpha(0.1)
-            else e.fadeAlpha(-0.1)
-        })
-        this.enemies = this.enemies.filter((e) => e.image.percentTraveled < 1.1)
-        this.scrollingElements = this.scrollingElements.filter((e) => e.percentTraveled < 1)
-        
+        }   
     }
     draw(ctx){
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         this.drawStaticBackground(ctx);
-        
-        this.scrollingElements.forEach((e) => e.draw(ctx))
-        this.enemies.forEach((e) => e.draw(ctx))
-        this.projectiles.forEach((e)=>e.draw(ctx))                    
-        this.player.draw(ctx);
-        
+        this.backgroundElements.forEach((e) => e.draw(ctx))
+        this.enemies.forEach(e => e.draw(ctx))
+        this.player.draw(ctx)
     }
-    drawStaticBackground(ctx){
-        
+    drawStaticBackground(ctx){  //replace this image so im not making a new gradient every frame
         const gradient = ctx.createLinearGradient(0,0,0,200)
-        
         gradient.addColorStop(1,"#b5dae5")
         gradient.addColorStop(0,"#0072b6")
         ctx.fillStyle = gradient;        
         ctx.fillRect(0,0,this.width,this.height)
-        
         GameImage.drawRoad(ctx)
     }
     getFramesDue(timestamp){
@@ -218,11 +191,20 @@ class Game{
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
-        //if (frameTime > 30) console.log(frameTime, "ms --- high frame time warning")
         return framesDue;
     }
 }
 
+class SoundEffect {
+    constructor(fileSrc, volume){
+        this.sound = new Audio()
+        this.sound.onload = (e) => {e.volume = volume}
+        this.sound.src = fileSrc
+    }
+    play(){
+        this.sound.play()
+    }
+}
 
 class GameImage {
     static perpsectiveBaseWidth = 1000 
@@ -259,11 +241,12 @@ class GameImage {
         this.sx = 0
         this.sy = 0
         this.percentTraveled = ((basePosY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
-        this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
-        this.maxSpeed = GameImage.scrollSpeed
+        
+        this.relativeSpeed = 0
         this.maxWidth = maxWidth
         this.maxHeight = maxHeight
         this.maxHeightOffset = heightOffset
+        this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
         this.dw = this.maxWidth * this.percentTraveled  
         this.dh = this.maxHeight * this.percentTraveled   
         this.dx = GameImage.baseCenterX - this.dw/2
@@ -271,21 +254,24 @@ class GameImage {
         this.heightTraveled = 0;
         this.angle = 0
         this.alpha = 1
-        this.shadow = {};
         this.flipped = false;
-        this.sway = 0;
-        this.bounce = 0;
-        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY        
+        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY  
+        this.markedForDel = false;      
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
     get baseY(){return this.dy+this.dh}
 
-
+    update(){
+        this.moveWithPerspective();
+        if (this.percentTraveled < 1) this.fadeAlpha(0.1) 
+        else this.fadeAlpha(-0.1)
+        if (this.percentTraveled > 1.15) this.markedForDel = true;
+    }
     moveWithPerspective(){
         this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
         if (this.percentTraveled > 1.5) return;
-        const speed = this.maxSpeed * Math.pow(this.percentTraveled,2)
+        const speed = (GameImage.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
@@ -342,7 +328,7 @@ class GameImage {
         if (alpha < 0) alpha = 0;
         this.alpha = alpha;
     }
-    imageSwap(imageSrc){
+    swapImage(imageSrc){
         const newImage = new Image()
         newImage.onload = () => this.image = newImage
         newImage.src = imageSrc
@@ -371,8 +357,6 @@ class Sprite extends GameImage{
         this.sy = frame.y 
         this.sw = frame.w
         this.sh = frame.h
-        // this.dx = this.heightTraveled ? this.dx + this.offSetWidth + this.sway : this.offSetWidth + this.sway 
-        // this.dy = this.heightTraveled ? this.dx + this.offSetHeight + this.bounce : this.offSetHeight + this.bounce
     }
     drawShadow(){
         return;
@@ -388,7 +372,6 @@ class Projectile extends GameImage {
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
         this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in perspective)
-        this.markForDelete = false;
     }
     update(){
         this.maxCenterOffset += this.velX
@@ -400,13 +383,15 @@ class Projectile extends GameImage {
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
-            40*0.5, 150*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
+            40*0.6, 150*0.6, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), randomValue(0.05,0.08)*Math.sign(velX))
         this.gravity = 3
         this.alpha = 1
-        this.sfx = new Audio()
-        this.sfx.src = `./sounds/clank/${Math.floor(Math.random()*5)}.wav`
-        this.sfx.volume = 0.1;
+    }
+    update(){
+        super.update()
+        if (this.velY < 10) this.fadeAlpha(-0.167)
+        if (this.alpha === 0) this.markedForDel = true;
     }
     drawShadow(){
         return
@@ -419,7 +404,7 @@ class FiredArrow extends Projectile {
             -40*Math.sign(basePosX - GameImage.baseCenterX),0.25*Math.sign(basePosX - GameImage.baseCenterX))
         this.gravity = 0;
         this.velY = 1
-        this.maxSpeed = 160
+        this.relativeSpeed = 160
     }
     update(){
         super.update();
@@ -455,7 +440,7 @@ class BloodSpurt extends Projectile {
             50, 50, basePosX, basePosY, heightOffset, randomValue(3,15), 
             randomValue(-3,6), 0, 0)
         this.gravity = 0.8;
-        this.maxSpeed = GameImage.scrollSpeed+(this.velTotal/3)
+        this.relativeSpeed = this.velTotal/3
     }
     update(){
         super.update()
@@ -463,7 +448,7 @@ class BloodSpurt extends Projectile {
         if (this.maxHeightOffset >= 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
-            this.maxSpeed = GameImage.scrollSpeed
+            this.relativeSpeed = 0
         }
         this.moveWithPerspective();
     }
@@ -486,7 +471,7 @@ class Ball extends Projectile {
         this.moveWithPerspective();
         this.maxHeightOffset -= this.velY
         this.maxCenterOffset += this.velX
-        this.maxSpeed = GameImage.scrollSpeed - this.velZ
+        this.relativeSpeed = -this.velZ
         if (this.maxHeightOffset < 0) {
             this.velY -= this.gravity
         }
@@ -522,6 +507,7 @@ class Enemy{
     constructor(game, baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
         this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
         this.game = game
+        this.markedForDel = false;
     }
     
 }
@@ -529,6 +515,7 @@ class Enemy{
 class Crossbowman extends Enemy {
     constructor(game, basePosX, basePosY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
+        this.alpha = 0;
         this.bloodSpurts = [];
         this.droppedCrossbows = [];
         this.firedArrows = [];
@@ -539,38 +526,34 @@ class Crossbowman extends Enemy {
                         Dead: "dead"}
         this.state = "unloaded"
         this.lane = this.image.maxCenterOffset < 0 ? "left" : "right"
-        this.loadSound = new Audio()
-        this.deathSound = new Audio()
-        this.bloodSound = new Audio()
-        this.loadSound.src = `./sounds/crossbow_load.ogg`
-        this.deathSound.src = `./sounds/death/${Math.floor(Math.random()*5)}.ogg`
-        this.bloodSound.src = `./sounds/gore/${Math.floor(Math.random()*3)}.wav`
-        this.loadSound.volume = 0.15
-        this.deathSound.volume = 0.3
-        this.bloodSound.volume = 0.3
+        this.sfx = {load: new SoundEffect (`./sounds/crossbow_load.ogg`,0.15),
+            death: new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3),
+            death2: new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3),
+            blocked: new SoundEffect(`./sounds/clank/${Math.floor(Math.random()*5)}.wav`,0.2) }
+       
     }
     update(){
+        this.image.update();
+        this.markedForDel = this.image.markedForDel
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
         this.updateFiredArrows();
-        this.bloodSpurts.forEach( e => {
-            e.update()
-        })
-
+        this.bloodSpurts.forEach( e => e.update())
         this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
         this.droppedCrossbows.forEach( e => e.update())
         this.blockedArrows.forEach(e => e.update())
         this.blockedArrows = this.blockedArrows.filter((e)=>e.percentTraveled < 1.2)
         this.droppedCrossbows = this.droppedCrossbows.filter( e => e.percentTraveled < 1.1)
+
     }
     loadCrossbow(){
         this.state = "loaded"
-        this.image.imageSwap('./images/gaurd_loaded.png')   
-        this.loadSound.play();
+        this.image.swapImage('./images/gaurd_loaded.png')   
+        this.sfx.load.play();
     }
     attack(){    
         this.state = "attacking"
-        this.image.imageSwap('./images/gaurd_nobolt.png')
+        this.image.swapImage('./images/gaurd_nobolt.png')
         const x = this.game.width/2 + this.image.maxCenterOffset
         const y = this.image.baseY
         const heightOffset = -this.image.maxHeight/2 
@@ -580,9 +563,9 @@ class Crossbowman extends Enemy {
     receiveAttack(){
         if (this.state === "dead") return;
         this.state = "dead"
-        this.image.imageSwap('./images/gaurd_dead_nocrossbow.png')
-        this.deathSound.play();
-        this.bloodSound.play();
+        this.image.swapImage('./images/gaurd_dead_nocrossbow.png')
+        this.sfx.death.play();
+        this.sfx.death2.play();
         const x = GameImage.baseCenterX + this.image.maxCenterOffset
         const y = this.image.baseY
         const heightOffset = -this.image.maxHeight/2 
@@ -603,16 +586,19 @@ class Crossbowman extends Enemy {
                 let velocityDirection = -Math.sign(e.velX)
                 let arrowDestinationX = this.game.width/2 + velocityDirection*150
                 let newArrow = new BlockedArrow(arrowDestinationX,-300, 45, randomValue(5,20)*velocityDirection)
-                newArrow.sfx.play();
+                this.sfx.blocked.play();
                 this.blockedArrows.push(newArrow)
-                e.markForDelete = true
+                e.markedForDel = true
             } 
             if (e.percentTraveled > 0.9){
-                e.markForDelete = true
+                e.markedForDel = true
             }
             
         })
-        this.firedArrows = this.firedArrows.filter(e=>!(e.markForDelete))
+        this.firedArrows = this.firedArrows.filter(e=>!(e.markedForDel))
+    }
+    fadeAlpha(num){
+        this.image.fadeAlpha(num)
     }
     draw(ctx){
         this.image.draw(ctx);
@@ -774,12 +760,7 @@ class Attacking extends State {
             this.sprite.frame > this.activeFrameRange[1]) return;
         this.game.enemies.forEach((e)=>{
             let inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
-            if (inRange && e.lane === this.player.lane){
-                e.receiveAttack();
-            } else if (inRange){
-                console.log(e.lane)
-                console.log(this.player.lane)
-            }
+            if (inRange && e.lane === this.player.lane) e.receiveAttack();
         })
     }
     angleAttack(){
