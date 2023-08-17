@@ -85,27 +85,22 @@ class UI {
         this.targetScore = 0
         this.actualCombo = 0
         this.targetCombo = 0
+        this.targetCoins = 0
         this.font = "80px Lugrasimo"
-        this.coinProjectiles = [];
         
     }    
     update(health, score, combo){
         this.targetHealth = health
         this.targetScore = score
         this.targetCombo = combo
-        this.coinProjectiles.forEach(e=> {
-            e.update()
-        })
-
     }
     draw(ctx){
         ctx.font = this.font
         ctx.fillStyle = "red"
         ctx.fillRect(400,60,200*this.health,40)
-        this.coinProjectiles.forEach(e=>e.draw(ctx))
     }
     spawnCoin(basePosX,basePosY,heightOffset){
-        this.coinProjectiles.push(new Coin(basePosX,basePosY,heightOffset,this.coinIconX,this.marginY+20))
+        Projectile.activeProjectiles.push(new Coin(basePosX,basePosY,heightOffset,this.coinIconX,this.marginY+20, this))
     }
     
     
@@ -330,8 +325,8 @@ class GameImage {
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
-        const heightOffset = this.maxHeightOffset * this.percentTraveled // note: might need to incorporate these back in to the calcs for dx,dy
-        const centerOffset = this.maxCenterOffset * this.percentTraveled // and just call moveWithPerspective on all items every time (just raising their height to counteract)
+        const heightOffset = this.maxHeightOffset * this.percentTraveled 
+        const centerOffset = this.maxCenterOffset * this.percentTraveled
         ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);    
         if (this.angle !== 0) this.rotate(ctx)
@@ -429,7 +424,10 @@ class Projectile extends GameImage {
         this.maxHeightOffset -= this.velY
         this.velY -= this.gravity
         this.angle += this.rotationSpeed*Math.PI*2   
-    }   
+    }
+    drawShadow(){
+        return;
+    } 
 }
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
@@ -446,9 +444,6 @@ class BlockedArrow extends Projectile {
         this.velX -= 0.5*Math.sign(this.velX)
         if (this.maxHeightOffset > 50) this.fadeAlpha(-0.2)
         if (this.alpha === 0) this.markedForDel = true;
-    }
-    drawShadow(){
-        return
     }
 }
 
@@ -467,23 +462,18 @@ class FiredArrow extends Projectile {
         this.checkForCollison();
     }
     checkForCollison(){
-        if (this.percentTraveled > 0.8){
-            this.markedForDel = true;
-            if (this.player.lane === this.lane &&
-                this.player.state === this.player.states["blocking"]){
-                let velocityDirection = -Math.sign(this.velX)
-                let arrowDestinationX = GameImage.baseCenterX + velocityDirection*150
-                Projectile.activeProjectiles.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
-            } else {
-                this.player.receiveAttack(this)
-            }
-        }
+        if (this.percentTraveled < 0.8) return;
+        this.markedForDel = true;
+        if (this.player.lane === this.lane &&
+            this.player.state === this.player.states["blocking"]){
+            const velocityDirection = -Math.sign(this.velX)
+            const arrowDestinationX = GameImage.baseCenterX + velocityDirection*150
+            Projectile.activeProjectiles.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
+        } else this.player.receiveAttack(this)
+        
     }
-    drawShadow(){
-        return
-    }
-
 }
+
 
 
 class DroppedCrossbow extends Projectile {
@@ -492,11 +482,13 @@ class DroppedCrossbow extends Projectile {
     }
     update(){
         super.update();
+        this.moveWithPerspective();
         if (this.maxHeightOffset >= 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
         }
-        this.moveWithPerspective();
+        this.fadeAlpha(-0.02)
+        if (this.alpha === 0) this.markedForDel = true
     }
     drawShadow(){
         return;
@@ -513,13 +505,15 @@ class BloodSpurt extends Projectile {
     }
     update(){
         super.update()
+        this.moveWithPerspective();
         this.fadeAlpha(-0.02)
+        if (this.alpha === 0) this.markedForDel = true
         if (this.maxHeightOffset >= 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
             this.relativeSpeed = 0
         }
-        this.moveWithPerspective();
+        
     }
     drawShadow(){
         return
@@ -528,28 +522,40 @@ class BloodSpurt extends Projectile {
 }
 
 class Coin extends Projectile{
-    constructor(x,y,heightOffset,targetX, targetY){
+    static lastSfxValue = 0 
+    constructor(x,y,heightOffset,targetX, targetY, UI){
         super(`./images/coin.png`,55*0.6,42*0.6,x+randomValue(-10,10),y,heightOffset+randomValue(-10,10),0,0,randomValue(0,2),0)
+        this.UI = UI
         this.targetX = targetX + randomValue(-80,80)
         this.targetY = targetY
         this.velY = (y - this.targetY)/ 100  
         this.velX = (this.targetX - x)/ 100
         this.XYratio = Math.abs(this.velX / this.velY)
-        this.acceleration = randomValue(1,1.01)
-        console.log(this.XYratio)
+        this.acceleration = randomValue(1.03,1.035)
         this.rotationSpeed = this.acceleration-1 
-        
         this.gravity = 0
+        this.setSfx()
     }
     update(){
         super.update();
         this.velY *= this.acceleration
         this.velX *= this.acceleration
         if (this.centerY-this.targetY < 100) this.fadeAlpha(-0.25)
-        if (this.alpha <= 0) this.markedForDel = false;             
+        if (this.alpha <= 0) {
+            this.markedForDel = true;
+            this.sfx.play(); 
+            this.UI.targetCoins += 1       
+        }    
     }
     drawShadow(){
-        return;
+        return
+    }
+    setSfx(){
+        let num = Math.floor(randomValue(1,6))
+        while(num === Coin.lastSfxValue) {num = Math.floor(randomValue(1,6))
+        console.log("re-rolled")}
+        Coin.lastSfxValue = num
+        this.sfx = new SoundEffect(`./sounds/coins/${num}.mp3`,0.3)
     }
 }
 
@@ -603,7 +609,7 @@ class Enemy{
         this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
         this.game = game
         this.markedForDel = false;
-        this.sfx = {coinJingle:new SoundEffect(`./sounds/coin_jingle.wav`,0.1)}
+        this.sfx = {}
     }
     get lane(){
         return this.image.lane
@@ -615,7 +621,6 @@ class Enemy{
         for (let i = 0; i < amount; i++) {
            this.game.UI.spawnCoin(x,y,heightOffset) 
         } 
-        setTimeout(()=>(this.sfx.coinJingle.play()),500)
     }
     
 }
@@ -624,29 +629,18 @@ class Crossbowman extends Enemy {
     constructor(game, basePosX, basePosY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
         this.alpha = 0;
-        this.bloodSpurts = [];
-        this.droppedCrossbows = [];
-        this.States = { Unloaded: "unloaded",
-                        Loaded: "loaded",
-                        Attacked: "attacked", 
-                        Dead: "dead"}
+        this.States = { Unloaded: "unloaded", Loaded: "loaded",
+                        Attacked: "attacked", Dead: "dead"}
         this.state = "unloaded"
-        this.sfx.load = new SoundEffect (`./sounds/crossbow_load.ogg`,0.15)
+        this.sfx.load = new SoundEffect (`./sounds/crossbow_loading/1.mp3`,0.1)
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
-        
-       
     }
     update(){
         this.image.update();
         this.markedForDel = this.image.markedForDel
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
-        this.bloodSpurts.forEach( e => e.update())
-        this.bloodSpurts = this.bloodSpurts.filter( e => e.alpha > 0)
-        this.droppedCrossbows.forEach( e => e.update())
-        this.droppedCrossbows = this.droppedCrossbows.filter( e => e.percentTraveled < 1.1)
-
     }
     loadCrossbow(){
         this.state = "loaded"
@@ -672,7 +666,7 @@ class Crossbowman extends Enemy {
         const heightOffset = -this.image.maxHeight/2 
         const crossbow = new DroppedCrossbow(x-(50*Math.sign(this.image.maxCenterOffset)), y+20, heightOffset)
         crossbow.flipped = this.image.flipped
-        this.droppedCrossbows.push(crossbow)
+        Projectile.activeProjectiles.push(crossbow)
         for (let index = 0; index < 60; index++) {
             Projectile.activeProjectiles.push(new BloodSpurt(x, y, heightOffset))    
         }
@@ -683,9 +677,6 @@ class Crossbowman extends Enemy {
     }
     draw(ctx){
         this.image.draw(ctx);
-        this.droppedCrossbows.forEach( e =>  e.draw(ctx))
-        this.bloodSpurts.forEach( e => e.draw(ctx))
-
     }
 }
 
@@ -705,23 +696,23 @@ class Player{
         this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
         this.lane = this.game.lanes["middle"]
         this.state = this.states.blocking;
-        this.isAttacking = false;
+        this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
+                        new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
+        this.angleCounter = 0;
+        this.angleIncrement = 1/10
     }
     update(input){
         this.state.update(input);
+        this.updateBounceSway()
     }
     draw(ctx){
         this.attack.draw(ctx)
         this.block.draw(ctx)
     }
     updateBounceSway() {
-        this.counter ++;
-        let bounceModifier = Math.sin(this.counter / 7.5) * 15;
-        let swayModifier = Math.cos(this.counter / 15) * 10;
-        if (bounceModifier > 0) bounceModifier *= -1;
-        if (swayModifier > 0) swayModifier *= -1;
-        this.block.sway = this.attack.sway = swayModifier;
-        this.block.bounce = this.attack.bounce = bounceModifier;
+        this.angleCounter += this.angleIncrement
+        let offset = Math.sin(this.angleCounter) * 1.5 * this.game.speedModifier
+        this.block.maxHeightOffset -= offset
     }
     changeState(state){
         this.state.exit();
@@ -730,12 +721,13 @@ class Player{
     }
     receiveAttack(source){
         console.log(source.lane)
+        let sfxChoice = Math.floor(randomValue(0,4))
+        this.sfx.hurt[sfxChoice].play();
         for (let index = 0; index < 30; index++) {
             const bloodSpurt = new BloodSpurt(source.centerX, this.block.baseY, -100)
             bloodSpurt.velY *= 0.5
             bloodSpurt.relativeSpeed *= -3
             Projectile.activeProjectiles.push(bloodSpurt)  
-
         }
     }
 }
