@@ -99,8 +99,8 @@ class UI {
         ctx.fillStyle = "red"
         ctx.fillRect(400,60,200*this.health,40)
     }
-    spawnCoin(basePosX,basePosY,heightOffset){
-        Projectile.activeProjectiles.push(new Coin(basePosX,basePosY,heightOffset,this.coinIconX,this.marginY+20, this))
+    spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
+        Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.coinIconX,this.marginY+20, this))
     }
     
     
@@ -275,32 +275,32 @@ class GameImage {
     }
 
     constructor(fileSrc, maxWidth, maxHeight, 
-        basePosX=GameImage.baseCenterX, basePosY=GameImage.perspectiveStartY, heightOffset = 0){
+        PosXAtBase=GameImage.baseCenterX, StartingPerspectiveHeight=GameImage.perspectiveStartY, heightOffset = 0){
         this.image = new Image()
         this.image.src = fileSrc
         this.sx = 0
         this.sy = 0
-        this.percentTraveled = ((basePosY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
-        
+        this.percentTraveled = ((StartingPerspectiveHeight)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
+        this.PosXAtBase = PosXAtBase
         this.relativeSpeed = 0
         this.maxWidth = maxWidth
         this.maxHeight = maxHeight
         this.maxHeightOffset = heightOffset
-        this.maxCenterOffset = (basePosX - GameImage.baseCenterX)
+        this.maxCenterOffset = (PosXAtBase - GameImage.baseCenterX)
         this.dw = this.maxWidth * this.percentTraveled  
         this.dh = this.maxHeight * this.percentTraveled   
         this.dx = GameImage.baseCenterX - this.dw/2
-        this.dy = basePosY - this.dh 
+        this.dy = StartingPerspectiveHeight - this.dh 
         this.heightTraveled = 0;
         this.angle = 0
         this.alpha = 1
         this.flipped = false;
-        this.distanceFromBase = GameImage.perspectiveBottomY - basePosY  
+        this.distanceFromBase = GameImage.perspectiveBottomY - StartingPerspectiveHeight  
         this.markedForDel = false;      
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
-    get baseY(){return this.dy+this.dh}
+    get perspectiveHeight(){return this.dy+this.dh}
     get lane(){
             if (this.maxCenterOffset < -50) return "left"
             if (this.maxCenterOffset > 50) return "right"
@@ -314,7 +314,7 @@ class GameImage {
         if (this.percentTraveled > 1.15) this.markedForDel = true;
     }
     moveWithPerspective(){
-        this.percentTraveled = ((this.baseY)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
+        this.percentTraveled = ((this.perspectiveHeight)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
         if (this.percentTraveled > 1.5) return;
         const speed = (GameImage.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
         this.distanceFromBase -= speed
@@ -339,7 +339,7 @@ class GameImage {
     drawShadow(ctx){
         if (this.percentTraveled > 1.25) return;
         const centerX = this.centerX
-        const centerY = this.baseY - 10
+        const centerY = this.perspectiveHeight - 10
         let sizeMulti = 1 + -this.maxHeightOffset/500
         if (sizeMulti < 1) sizeMulti = 1; 
         const alpha = 0.5 * (1/(Math.pow(sizeMulti,2)))
@@ -410,8 +410,8 @@ class Sprite extends GameImage{
 
 class Projectile extends GameImage {
     static activeProjectiles = [];
-    constructor(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset, velTotal=0, velX=0, initialAngle=0, rotationSpeed=0){
-        super(fileSrc, maxHeight, maxWidth, basePosX, basePosY, heightOffset)
+    constructor(fileSrc, maxHeight, maxWidth, PosXAtBase, StartingPerspectiveHeight, heightOffset, velTotal=0, velX=0, initialAngle=0, rotationSpeed=0){
+        super(fileSrc, maxHeight, maxWidth, PosXAtBase, StartingPerspectiveHeight, heightOffset)
         this.velTotal = velTotal
         this.velX = velX
         this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2)) || 0
@@ -448,9 +448,9 @@ class BlockedArrow extends Projectile {
 }
 
 class FiredArrow extends Projectile {
-    constructor(basePosX, basePosY, heightOffset, player){
-        super('./images/fired_arrow.png', 50, 100, basePosX, basePosY+10, heightOffset,0, 
-            -40*Math.sign(basePosX - GameImage.baseCenterX),0.25*Math.sign(basePosX - GameImage.baseCenterX))
+    constructor(PosXAtBase, StartingPerspectiveHeight, heightOffset, player){
+        super('./images/fired_arrow.png', 50, 100, PosXAtBase, StartingPerspectiveHeight+10, heightOffset,0, 
+            -40*Math.sign(PosXAtBase - GameImage.baseCenterX),0.25*Math.sign(PosXAtBase - GameImage.baseCenterX))
         this.gravity = 0;
         this.velY = 1
         this.relativeSpeed = 160
@@ -474,11 +474,10 @@ class FiredArrow extends Projectile {
     }
 }
 
-
-
 class DroppedCrossbow extends Projectile {
-    constructor(basePosX, basePosY, heightOffset){
-        super('./images/crossbow.png', 250*0.8, 141*0.8, basePosX, basePosY, heightOffset, 10, 0)
+    constructor(PosXAtBase, StartingPerspectiveHeight, heightOffset, flipped){
+        super('./images/crossbow.png', 250*0.8, 141*0.8, PosXAtBase, StartingPerspectiveHeight, heightOffset, 10, 0)
+        this.flipped = flipped
     }
     update(){
         super.update();
@@ -487,18 +486,15 @@ class DroppedCrossbow extends Projectile {
             this.maxHeightOffset = 0;
             this.velX = 0;
         }
-        this.fadeAlpha(-0.02)
-        if (this.alpha === 0) this.markedForDel = true
-    }
-    drawShadow(){
-        return;
+        //this.fadeAlpha(-0.01)
+        if (this.percentTraveled > 1.15) this.markedForDel = true
     }
 }
 
 class BloodSpurt extends Projectile {
-    constructor(basePosX, basePosY, heightOffset){
+    constructor(PosXAtBase, StartingPerspectiveHeight, heightOffset){
         super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
-            50, 50, basePosX, basePosY, heightOffset, randomValue(3,15), 
+            50, 50, PosXAtBase, StartingPerspectiveHeight, heightOffset, randomValue(3,15), 
             randomValue(-3,6), 0, 0)
         this.gravity = 0.8;
         this.relativeSpeed = this.velTotal/3
@@ -506,17 +502,13 @@ class BloodSpurt extends Projectile {
     update(){
         super.update()
         this.moveWithPerspective();
-        this.fadeAlpha(-0.02)
+        this.fadeAlpha(-0.01)
         if (this.alpha === 0) this.markedForDel = true
-        if (this.maxHeightOffset >= 0){
+        if (this.maxHeightOffset > 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
             this.relativeSpeed = 0
         }
-        
-    }
-    drawShadow(){
-        return
     }
     
 }
@@ -532,7 +524,7 @@ class Coin extends Projectile{
         this.velX = (this.targetX - x)/ 100
         this.XYratio = Math.abs(this.velX / this.velY)
         this.acceleration = randomValue(1.03,1.035)
-        this.rotationSpeed = this.acceleration-1 
+        this.rotationSpeed = randomValue(-0.02,0.02)//this.acceleration-1.02
         this.gravity = 0
         this.setSfx()
     }
@@ -547,13 +539,9 @@ class Coin extends Projectile{
             this.UI.targetCoins += 1       
         }    
     }
-    drawShadow(){
-        return
-    }
     setSfx(){
         let num = Math.floor(randomValue(1,6))
-        while(num === Coin.lastSfxValue) {num = Math.floor(randomValue(1,6))
-        console.log("re-rolled")}
+        while(num === Coin.lastSfxValue) { num = Math.floor(randomValue(1,6)) }
         Coin.lastSfxValue = num
         this.sfx = new SoundEffect(`./sounds/coins/${num}.mp3`,0.3)
     }
@@ -605,8 +593,8 @@ class Ball extends Projectile {
 
 
 class Enemy{
-    constructor(game, baseImageSrc, maxWidth, maxHeight, basePosX, basePosY){
-        this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, basePosX, basePosY)
+    constructor(game, baseImageSrc, maxWidth, maxHeight, PosXAtBase, StartingPerspectiveHeight){
+        this.image = new GameImage(baseImageSrc, maxWidth, maxHeight, PosXAtBase, StartingPerspectiveHeight)
         this.game = game
         this.markedForDel = false;
         this.sfx = {}
@@ -615,30 +603,34 @@ class Enemy{
         return this.image.lane
     }
     spawnCoins(amount){
-        const x = this.game.width/2 + this.image.maxCenterOffset
-        const y = this.image.baseY
-        const heightOffset = -this.image.maxHeight/2 
+        const {PosXAtBase,perspectiveHeight,maxHeight} = this.image
         for (let i = 0; i < amount; i++) {
-           this.game.UI.spawnCoin(x,y,heightOffset) 
+           this.game.UI.spawnCoin(PosXAtBase,perspectiveHeight,-maxHeight/2) 
         } 
     }
     
 }
 
 class Crossbowman extends Enemy {
-    constructor(game, basePosX, basePosY){
-        super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, basePosX, basePosY)
+    constructor(game, PosXAtBase, StartingPerspectiveHeight){
+        super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, PosXAtBase, StartingPerspectiveHeight)
         this.alpha = 0;
-        this.States = { Unloaded: "unloaded", Loaded: "loaded",
-                        Attacked: "attacked", Dead: "dead"}
+        this.states = { unloaded: "unloaded", loaded: "loaded",
+                        fired: "fired", dead: "dead"}
         this.state = "unloaded"
         this.sfx.load = new SoundEffect (`./sounds/crossbow_loading/1.mp3`,0.1)
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
+        this.deathCounter = 0;
     }
     update(){
-        this.image.update();
-        this.markedForDel = this.image.markedForDel
+        this.image.moveWithPerspective()
+        if (this.state === this.states.unloaded) this.fadeAlpha(1/6)
+        if (this.state === this.states.dead) {
+            this.deathCounter += 1
+            if (this.deathCounter > 20) this.fadeAlpha(-0.1)
+        }
+        if (this.percentTraveled > 1.15) this.markedForDel = true;
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
     }
@@ -648,12 +640,11 @@ class Crossbowman extends Enemy {
         this.sfx.load.play();
     }
     attack(){    
-        this.state = "attacking"
+        this.state = "fired"
         this.image.swapImage('./images/gaurd_nobolt.png')
-        const x = this.game.width/2 + this.image.maxCenterOffset
-        const y = this.image.baseY
-        const heightOffset = -this.image.maxHeight/2 
-        Projectile.activeProjectiles.push(new FiredArrow(x,y,heightOffset, this.game.player))
+        const {PosXAtBase,perspectiveHeight,maxHeight} = this.image
+        Projectile.activeProjectiles.push(new FiredArrow(PosXAtBase,perspectiveHeight,-maxHeight/2, this.game.player))
+        
     }
     receiveAttack(){
         if (this.state === "dead") return;
@@ -661,14 +652,10 @@ class Crossbowman extends Enemy {
         this.image.swapImage('./images/gaurd_dead_nocrossbow.png')
         this.sfx.death.play();
         this.sfx.death2.play();
-        const x = GameImage.baseCenterX + this.image.maxCenterOffset
-        const y = this.image.baseY
-        const heightOffset = -this.image.maxHeight/2 
-        const crossbow = new DroppedCrossbow(x-(50*Math.sign(this.image.maxCenterOffset)), y+20, heightOffset)
-        crossbow.flipped = this.image.flipped
-        Projectile.activeProjectiles.push(crossbow)
+        const {PosXAtBase,perspectiveHeight,maxHeight, flipped} = this.image
+        Projectile.activeProjectiles.push(new DroppedCrossbow(PosXAtBase, perspectiveHeight, -maxHeight/2, flipped))
         for (let index = 0; index < 60; index++) {
-            Projectile.activeProjectiles.push(new BloodSpurt(x, y, heightOffset))    
+            Projectile.activeProjectiles.push(new BloodSpurt(PosXAtBase, perspectiveHeight, -maxHeight/2))    
         }
         this.spawnCoins(5)
     }
@@ -696,11 +683,11 @@ class Player{
         this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
         this.lane = this.game.lanes["middle"]
         this.state = this.states.blocking;
-        this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
-                        new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
         this.angleCounter = 0;
         this.bounceOffset = 0
         this.recoveryOffset = 0
+        this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
+                        new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
 
     }
     update(input){
@@ -735,12 +722,12 @@ class Player{
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
         for (let index = 0; index < 30; index++) {
-            const bloodSpurt = new BloodSpurt(source.centerX, this.block.baseY, -100)
+            const bloodSpurt = new BloodSpurt(source.centerX, this.block.perspectiveHeight, -100)
             bloodSpurt.velY *= 0.5
             bloodSpurt.relativeSpeed *= -3
             Projectile.activeProjectiles.push(bloodSpurt)  
         }
-        this.recoveryOffset = 60
+        this.recoveryOffset = 80
     }
 }
 
