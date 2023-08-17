@@ -699,20 +699,31 @@ class Player{
         this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
                         new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
         this.angleCounter = 0;
-        this.angleIncrement = 1/10
+        this.bounceOffset = 0
+        this.recoveryOffset = 0
+
     }
     update(input){
         this.state.update(input);
-        this.updateBounceSway()
+        this.addBounce()
     }
     draw(ctx){
         this.attack.draw(ctx)
+        this.block.maxHeightOffset += this.bounceOffset
         this.block.draw(ctx)
+        this.block.maxHeightOffset -= this.bounceOffset
     }
-    updateBounceSway() {
-        this.angleCounter += this.angleIncrement
-        let offset = Math.sin(this.angleCounter) * 1.5 * this.game.speedModifier
-        this.block.maxHeightOffset -= offset
+    addBounce() {
+        this.angleCounter += 1/10
+        let mod = 20
+        let unmodBounceOffset = Math.sin(this.angleCounter)
+        if (this.recoveryOffset > 1) {
+            this.recoveryOffset -=  2 * (this.recoveryOffset/20)
+            mod *= (1/this.recoveryOffset)
+        } else this.recoveryOffset = 0
+        if (unmodBounceOffset > 0) mod *= -1
+        this.bounceOffset = unmodBounceOffset * mod * this.game.speedModifier + this.recoveryOffset
+        
     }
     changeState(state){
         this.state.exit();
@@ -729,6 +740,7 @@ class Player{
             bloodSpurt.relativeSpeed *= -3
             Projectile.activeProjectiles.push(bloodSpurt)  
         }
+        this.recoveryOffset = 60
     }
 }
 
