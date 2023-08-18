@@ -486,7 +486,7 @@ class DroppedCrossbow extends Projectile {
             this.maxHeightOffset = 0;
             this.velX = 0;
         }
-        //this.fadeAlpha(-0.01)
+        this.fadeAlpha(-0.01)
         if (this.percentTraveled > 1.15) this.markedForDel = true
     }
 }
@@ -510,7 +510,37 @@ class BloodSpurt extends Projectile {
             this.relativeSpeed = 0
         }
     }
-    
+}
+
+class PlayerBloodSpurt extends Projectile {
+    constructor(PosXAtBase){
+        super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
+            50, 50, PosXAtBase, GameImage.perspectiveBottomY, -150, randomValue(5,15), 
+            randomValue(-5,5), 0, 0)
+        
+        this.relativeSpeed = this.velY * randomValue(-2,1)
+        this.streakOnScreen = GameImage.scrollSpeed+this.relativeSpeed > 0
+        this.velY = this.streakOnScreen ? randomValue(0,5) : this.velY
+        this.gravity = this.streakOnScreen ? 0.1 : 1;
+    }
+    update(){
+        super.update()
+        this.moveWithPerspective();
+        if (this.streakOnScreen) {
+            this.relativeSpeed = -6
+            this.velX *= 0.95;
+            this.fadeAlpha(-0.01)
+        } else {
+            this.fadeAlpha(-0.02)
+            if (this.maxHeightOffset > 0){
+            this.maxHeightOffset = 0;
+            this.velX = 0;
+            this.relativeSpeed = 0
+        }
+        }
+        if (this.alpha === 0) this.markedForDel = true
+        
+    }
 }
 
 class Coin extends Projectile{
@@ -721,11 +751,8 @@ class Player{
         console.log(source.lane)
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
-        for (let index = 0; index < 30; index++) {
-            const bloodSpurt = new BloodSpurt(source.centerX, this.block.perspectiveHeight, -100)
-            bloodSpurt.velY *= 0.5
-            bloodSpurt.relativeSpeed *= -3
-            Projectile.activeProjectiles.push(bloodSpurt)  
+        for (let index = 0; index < 40; index++) {
+            Projectile.activeProjectiles.push(new PlayerBloodSpurt(source.centerX))  
         }
         this.recoveryOffset = 80
     }
