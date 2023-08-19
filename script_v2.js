@@ -90,14 +90,15 @@ class UI {
         this.displayCoins = 0
         this.font = "60px Lugrasimo"
         this.textUpdateRate = 24
-        this.parchmentSprite = sprites.parchment
-        this.parchmentSprite.maxHeightOffset = -850
-        this.parchmentSprite.loops = false;
-        this.parchmentSprite.alpha = 0.9
+        this.parchment = sprites.parchment
+        this.parchmentLastFrame = new Image()
+        this.parchmentLastFrame.src = "./images/parchment_lastframe.png"
+        this.parchment.maxHeightOffset = -850
+        this.parchment.loops = false;
+        this.parchment.alpha = 0.9
     }    
     update(health, score, combo){
         if (this.game.totalFrames < this.startFrame) return;
-        this.parchmentSprite.update();
         if (this.game.totalFrames % (this.game.fps/this.textUpdateRate) !== 1) return;
         if (this.targetCoins > this.displayCoins) this.updateCoins()
     }
@@ -106,12 +107,11 @@ class UI {
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
-        this.parchmentSprite.draw(ctx)
-        if (this.parchmentSprite.frame < this.parchmentSprite.lastFrameIndex-10) return; 
         ctx.fillStyle = "white"
         ctx.fillText(`${this.displayCoins}`, this.marginX, this.marginY)
         ctx.strokeText(`${this.displayCoins}`, this.marginX, this.marginY)
     }
+
     spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
         Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.coinIconX,this.marginY+20, this))
     }
