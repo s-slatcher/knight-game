@@ -77,27 +77,30 @@ document.addEventListener("touchend", e => {
 class UI {
     constructor(game){
         this.game = game;
-        this.marginY = 60
-        this.coinIconX = this.game.width/10
-        this.actualHealth = 1
+        this.marginY = 100
+        this.marginX = 150
+        this.coinIconX = this.gametextUpdateSpeed = 0.5
         this.targetHealth = 1
         this.actualScore = 0
         this.targetScore = 0
         this.actualCombo = 0
         this.targetCombo = 0
         this.targetCoins = 0
+        this.displayCoins = 0
         this.font = "80px Lugrasimo"
-        
+        this.textUpdateRate = 24
     }    
     update(health, score, combo){
-        this.targetHealth = health
-        this.targetScore = score
-        this.targetCombo = combo
+        if (this.game.totalFrames % (this.game.fps/this.textUpdateRate) !== 1) return;
+        if (this.targetCoins > this.displayCoins) this.updateCoins()
+    }
+    updateCoins() {
+        this.displayCoins++
     }
     draw(ctx){
-        ctx.font = this.font
-        ctx.fillStyle = "red"
-        ctx.fillRect(400,60,200*this.health,40)
+        ctx.fillStyle = "white"
+        ctx.fillText(`${this.displayCoins}`, this.marginX, this.marginY)
+        ctx.strokeText(`${this.displayCoins}`, this.marginX, this.marginY)
     }
     spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
         Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.coinIconX,this.marginY+20, this))
@@ -122,12 +125,11 @@ class Game{
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, sprites)
         this.UI = new UI(this)
+        this.ctx.font = "80px Lugrasimo"
         this.health = 1;
         this.enemies = [];
         this.backgroundElements = [];
-        this.fpsSlider = document.getElementById("fps")
         this.input;
-        //this.testBall = new Ball()
     }
     handleInput(keyRecord, touchRecord){
         if (keyRecord.includes('a') && keyRecord.includes('b') && keyRecord.includes('c')){
@@ -173,12 +175,22 @@ class Game{
     }
     handleBackground(){
         if (this.totalFrames % 32/this.speedModifier === 0) {
-            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,undefined,40)) 
-            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,undefined,40))
+            let start = GameImage.perspectiveStartY
+            
+
+            if (Math.floor(randomValue(1,10)) % 9 === 0) this.backgroundElements.unshift(new GameImage("./images/bush.png",243*1.5,132*1.5,(this.width/2)+1000,start,40))
+            else this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,start,40)) 
+            if (Math.floor(randomValue(1,10)) % 9 === 0) this.backgroundElements.unshift(new GameImage("./images/bush.png",243*1.5,132*1.5,(this.width/2)-1000,start,40))
+            else this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,start,40))
+            
+            
             this.backgroundElements[0].alpha = 0;
             this.backgroundElements[0].flipped = true;
-            this.backgroundElements[1].alpha = 0;    
+            this.backgroundElements[1].alpha = 0;  
+            
+           
         }
+        
         this.backgroundElements = this.backgroundElements.filter( e => {
             e.update();
             return !(e.percentTraveled>1)
@@ -517,19 +529,19 @@ class PlayerBloodSpurt extends Projectile {
         super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
             50, 50, PosXAtBase, GameImage.perspectiveBottomY, -150, randomValue(5,15), 
             randomValue(-5,5), 0, 0)
-        
-        this.relativeSpeed = this.velY * randomValue(-2,1)
+        this.alpha = 0.75
+        this.relativeSpeed = this.velY * randomValue(0,1)
         this.streakOnScreen = GameImage.scrollSpeed+this.relativeSpeed > 0
         this.velY = this.streakOnScreen ? randomValue(0,5) : this.velY
-        this.gravity = this.streakOnScreen ? 0.1 : 1;
+        this.gravity = 0.1
     }
     update(){
         super.update()
         this.moveWithPerspective();
         if (this.streakOnScreen) {
             this.relativeSpeed = -6
-            this.velX *= 0.95;
-            this.fadeAlpha(-0.01)
+            this.velX *= 0.95
+            this.fadeAlpha(-0.02)
         } else {
             this.fadeAlpha(-0.02)
             if (this.maxHeightOffset > 0){
@@ -658,7 +670,7 @@ class Crossbowman extends Enemy {
         if (this.state === this.states.unloaded) this.fadeAlpha(1/6)
         if (this.state === this.states.dead) {
             this.deathCounter += 1
-            if (this.deathCounter > 20) this.fadeAlpha(-0.1)
+            if (this.deathCounter > 30) this.fadeAlpha(-0.1)
         }
         if (this.percentTraveled > 1.15) this.markedForDel = true;
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
@@ -679,12 +691,12 @@ class Crossbowman extends Enemy {
     receiveAttack(){
         if (this.state === "dead") return;
         this.state = "dead"
-        this.image.swapImage('./images/gaurd_dead_nocrossbow.png')
+        this.image.swapImage('./images/gaurd_dead_bloody.png')
         this.sfx.death.play();
         this.sfx.death2.play();
         const {PosXAtBase,perspectiveHeight,maxHeight, flipped} = this.image
         Projectile.activeProjectiles.push(new DroppedCrossbow(PosXAtBase, perspectiveHeight, -maxHeight/2, flipped))
-        for (let index = 0; index < 60; index++) {
+        for (let index = 0; index < 40; index++) {
             Projectile.activeProjectiles.push(new BloodSpurt(PosXAtBase, perspectiveHeight, -maxHeight/2))    
         }
         this.spawnCoins(5)
@@ -751,7 +763,7 @@ class Player{
         console.log(source.lane)
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
-        for (let index = 0; index < 40; index++) {
+        for (let index = 0; index < 30; index++) {
             Projectile.activeProjectiles.push(new PlayerBloodSpurt(source.centerX))  
         }
         this.recoveryOffset = 80
