@@ -75,8 +75,9 @@ document.addEventListener("touchend", e => {
 })
 
 class UI {
-    constructor(game){
+    constructor(game,sprites){
         this.game = game;
+        this.startFrame = 100
         this.marginY = 100
         this.marginX = 150
         this.coinIconX = this.gametextUpdateSpeed = 0.5
@@ -87,10 +88,16 @@ class UI {
         this.targetCombo = 0
         this.targetCoins = 0
         this.displayCoins = 0
-        this.font = "80px Lugrasimo"
+        this.font = "60px Lugrasimo"
         this.textUpdateRate = 24
+        this.parchmentSprite = sprites.parchment
+        this.parchmentSprite.maxHeightOffset = -850
+        this.parchmentSprite.loops = false;
+        this.parchmentSprite.alpha = 0.9
     }    
     update(health, score, combo){
+        if (this.game.totalFrames < this.startFrame) return;
+        this.parchmentSprite.update();
         if (this.game.totalFrames % (this.game.fps/this.textUpdateRate) !== 1) return;
         if (this.targetCoins > this.displayCoins) this.updateCoins()
     }
@@ -98,6 +105,9 @@ class UI {
         this.displayCoins++
     }
     draw(ctx){
+        if (this.game.totalFrames < this.startFrame) return;
+        this.parchmentSprite.draw(ctx)
+        if (this.parchmentSprite.frame < this.parchmentSprite.lastFrameIndex-10) return; 
         ctx.fillStyle = "white"
         ctx.fillText(`${this.displayCoins}`, this.marginX, this.marginY)
         ctx.strokeText(`${this.displayCoins}`, this.marginX, this.marginY)
@@ -124,7 +134,7 @@ class Game{
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, sprites)
-        this.UI = new UI(this)
+        this.UI = new UI(this, sprites)
         this.ctx.font = "80px Lugrasimo"
         this.health = 1;
         this.enemies = [];
@@ -155,6 +165,7 @@ class Game{
         this.input = input;
     }
     update(timestamp, keyRecord, touchRecord){
+        
         if (!document.fullscreenElement) {
             document.getElementById("resume-btn").classList.remove("disabled")
             return
@@ -169,6 +180,7 @@ class Game{
             this.handleBackground();
             Projectile.activeProjectiles.forEach((e)=>e.update())
             Projectile.activeProjectiles = Projectile.activeProjectiles.filter((e)=>!e.markedForDel)
+            if (Sprite.unloadedImages > 0) return;
             this.draw(this.ctx);
         }
         
@@ -176,21 +188,12 @@ class Game{
     handleBackground(){
         if (this.totalFrames % 32/this.speedModifier === 0) {
             let start = GameImage.perspectiveStartY
-            
-
-            if (Math.floor(randomValue(1,10)) % 9 === 0) this.backgroundElements.unshift(new GameImage("./images/bush.png",243*1.5,132*1.5,(this.width/2)+1000,start,40))
-            else this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,start,40)) 
-            if (Math.floor(randomValue(1,10)) % 9 === 0) this.backgroundElements.unshift(new GameImage("./images/bush.png",243*1.5,132*1.5,(this.width/2)-1000,start,40))
-            else this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,start,40))
-            
-            
+            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,start,40)) 
+            this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,start,40)) 
             this.backgroundElements[0].alpha = 0;
             this.backgroundElements[0].flipped = true;
             this.backgroundElements[1].alpha = 0;  
-            
-           
         }
-        
         this.backgroundElements = this.backgroundElements.filter( e => {
             e.update();
             return !(e.percentTraveled>1)
@@ -395,18 +398,23 @@ class GameImage {
 }
 
 class Sprite extends GameImage{
-    constructor(sprite, maxWidth, maxHeight, heightOffset){
-        super(`./images/${sprite.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
+    static unloadedImages = 0;
+    constructor(spriteJson, maxWidth, maxHeight, heightOffset){
+        super(`./images/${spriteJson.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
+        this.image.onload = (()=> Sprite.unloadedImages -= 1)
+        Sprite.unloadedImages += 1
         this.offSetWidth = 0;
         this.offSetHeight = 0;
         this.frame = 0;
-        this.sprite = sprite;
-        this.frames = sprite.frames
+        this.sprite = spriteJson;
+        this.frames = spriteJson.frames
+        this.lastFrameIndex = this.frames.length-1
+        this.loops = true;
     }
     update(){
-        this.frame += 1;
-        if (this.frame>this.frames.length-1) this.frame = 0;
         this.updateSourceDimensions()
+        this.frame += 1;
+        if (this.frame>this.frames.length-1) this.frame = this.loops ? 0 : this.frame-1;
     }
     updateSourceDimensions(){
         let frame = this.frames[this.frame].frame 
@@ -903,11 +911,13 @@ class Attacking extends State {
 
 async function fetchSprites(){
     let sprites = {}
-    const [atkRep, blockRep] = await Promise.all([
+    const [atkRep, blockRep, parchmentRep] = await Promise.all([
         fetch("./sword-attack-v2-compressed.json"),
-        fetch("./sword48.json")])
+        fetch("./sword48.json"),
+        fetch("./parchment.json")])
     await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8, 200));
     await blockRep.json().then((sprite) => sprites.block = new Sprite(sprite, 842, 609));
+    await parchmentRep.json().then((sprite) => sprites.parchment = new Sprite(sprite, 850, 140));
     startGame(sprites);
 };
 
@@ -916,8 +926,8 @@ function startGame(sprites){
     animate(0,game);  
 }
 function animate(timestamp, game){
-    // ctx.clearRect(0, 0, canvas.width, canvas.height);
     game.update(timestamp, keyRecord, touchRecord)
+    
     requestAnimationFrame((timestamp)=>{
         
         animate(timestamp, game)
