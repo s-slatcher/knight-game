@@ -99,7 +99,8 @@ document.addEventListener("touchend", e => {
 class UI {
     constructor(game,spriteBitmap){
         this.game = game;
-        this.sprite = new Sprite(spriteBitmap, 880, 260*0.5, -850)
+        this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
+        this.sprite.alpha = 0.9;
         this.startFrame = 100
         this.marginY = 100
         this.marginX = 150
@@ -774,6 +775,7 @@ class Player{
         this.bounceOffset = unmodBounceOffset * mod * this.game.speedModifier + this.recoveryOffset
         
     }
+    
     changeState(state){
         this.state.exit();
         this.state = this.states[state]
