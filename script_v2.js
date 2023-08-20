@@ -101,11 +101,11 @@ class UI {
         this.game = game;
         this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
         this.sprite.alpha = 0.9;
-        this.startFrame = 100
+        this.startFrame = 150
+        this.coinImages = []
+        this.coinImage = 0
         this.marginY = 100
         this.marginX = 150
-        this.coinIconX = 0;
-        this.gametextUpdateSpeed = 0.5
         this.textUpdateRate = 24
         this.targetHealth = 1
         this.actualScore = 0
@@ -114,9 +114,15 @@ class UI {
         this.targetCombo = 0
         this.targetCoins = 0
         this.displayCoins = 0
-        this.font = "40px Lugrasimo"
-        
+        this.initalizeCoins() 
     }    
+    initalizeCoins(){
+        for (let i = 0; i < 6; i++) {
+            this.coinImages
+                .push(new GameImage(`./images/coin_pile/${i+1}.png`,80,80,this.marginX+20,GameImage.perspectiveBottomY,-GameImage.perspectiveBottomY+115))
+            this.coinImages[this.coinImages.length-1].drawShadow = ()=>{return}
+        }
+    }
     update(health, score, combo){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.incrementFrame(0.5);
@@ -125,16 +131,20 @@ class UI {
     }
     updateCoins() {
         this.displayCoins++
+        if (this.coinImage === 5) return;
+        if (this.displayCoins > Math.pow((this.coinImage+3),3)) this.coinImage++
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.draw(ctx);
+        if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
-        ctx.fillText(`${this.displayCoins}`, this.marginX, this.marginY)
+        ctx.fillText(`${this.displayCoins}`, this.marginX + 75, this.marginY)
+        this.coinImages[this.coinImage].draw(ctx)
     }
 
     spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
-        Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.coinIconX,this.marginY+20, this))
+        Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.marginX,this.marginY+20, this))
     }
     
     
@@ -156,7 +166,7 @@ class Game{
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
         this.UI = new UI(this,bitmaps.ui)
-        this.ctx.font = "60px Lugrasimo"
+        this.ctx.font = "45px Lugrasimo"
         this.health = 1;
         this.enemies = [];
         this.backgroundElements = [];
