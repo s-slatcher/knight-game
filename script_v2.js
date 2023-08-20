@@ -9,6 +9,10 @@ const startButton = document.getElementById("start-btn")
 const ctx = canvas.getContext('2d');
 const keyRecord = [];
 const touchRecord = {};
+const bitmaps = {}
+let spritesToLoad = 3;
+let spritesLoaded = 0;
+
 
 canvas.width = 1000;
 canvas.height = 1000;
@@ -22,11 +26,29 @@ const twoPointDistance = (coords1, coords2) => {
     return Math.sqrt(Math.pow((coords2[0]-coords1[0]),2) + Math.pow((coords2[1]-coords1[1]),2))
 }
 
-startButton.addEventListener('click',() => {
-    fetchSprites();
-    canvas.requestFullscreen();
-    startButton.classList.add("disabled")
-})
+getSprites();
+
+const updateLoadScreen = function(){
+    spritesLoaded += 1;
+    let loadPercent = Math.floor((spritesLoaded/spritesToLoad)*100)
+    startButton.innerHTML = `Loading ${loadPercent}%`
+    if (spritesLoaded === spritesToLoad) {
+        startButton.innerHTML = "Start Game"
+        startButton.addEventListener('click',() => {   
+        startButton.classList.add("disabled")
+        canvas.requestFullscreen().then(startGame());
+        
+    })}
+    
+}
+
+// startButton.addEventListener('click',() => {
+
+//     fetchSpritesJson();
+//     startButton.classList.add("disabled")
+//     canvas.requestFullscreen();
+//     // note to self, start with a loading animation then when loaded, enable the start game button
+// })
 
 resumeButton.addEventListener('click', () => {
     canvas.requestFullscreen();
@@ -75,12 +97,15 @@ document.addEventListener("touchend", e => {
 })
 
 class UI {
-    constructor(game,sprites){
+    constructor(game,spriteBitmap){
         this.game = game;
+        this.sprite = new Sprite(spriteBitmap, 880, 260*0.5, -850)
         this.startFrame = 100
         this.marginY = 100
         this.marginX = 150
-        this.coinIconX = this.gametextUpdateSpeed = 0.5
+        this.coinIconX = 0;
+        this.gametextUpdateSpeed = 0.5
+        this.textUpdateRate = 24
         this.targetHealth = 1
         this.actualScore = 0
         this.targetScore = 0
@@ -88,17 +113,12 @@ class UI {
         this.targetCombo = 0
         this.targetCoins = 0
         this.displayCoins = 0
-        this.font = "60px Lugrasimo"
-        this.textUpdateRate = 24
-        this.parchment = sprites.parchment
-        this.parchmentLastFrame = new Image()
-        this.parchmentLastFrame.src = "./images/parchment_lastframe.png"
-        this.parchment.maxHeightOffset = -850
-        this.parchment.loops = false;
-        this.parchment.alpha = 0.9
+        this.font = "40px Lugrasimo"
+        
     }    
     update(health, score, combo){
         if (this.game.totalFrames < this.startFrame) return;
+        this.sprite.incrementFrame(0.5);
         if (this.game.totalFrames % (this.game.fps/this.textUpdateRate) !== 1) return;
         if (this.targetCoins > this.displayCoins) this.updateCoins()
     }
@@ -107,9 +127,9 @@ class UI {
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
-        ctx.fillStyle = "white"
+        this.sprite.draw(ctx);
+        ctx.fillStyle = "black"
         ctx.fillText(`${this.displayCoins}`, this.marginX, this.marginY)
-        ctx.strokeText(`${this.displayCoins}`, this.marginX, this.marginY)
     }
 
     spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
@@ -120,7 +140,7 @@ class UI {
 }
 
 class Game{
-    constructor(ctx, width, height, sprites){
+    constructor(ctx, width, height, bitmaps){
         this.ctx = ctx;
         this.width = width;
         this.height = height;
@@ -133,13 +153,14 @@ class Game{
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
-        this.player = new Player(this, sprites)
-        this.UI = new UI(this, sprites)
-        this.ctx.font = "80px Lugrasimo"
+        this.player = new Player(this, bitmaps.block, bitmaps.attack)
+        this.UI = new UI(this,bitmaps.ui)
+        this.ctx.font = "60px Lugrasimo"
         this.health = 1;
         this.enemies = [];
         this.backgroundElements = [];
         this.input;
+        this.bitmaps = bitmaps
     }
     handleInput(keyRecord, touchRecord){
         if (keyRecord.includes('a') && keyRecord.includes('b') && keyRecord.includes('c')){
@@ -324,7 +345,7 @@ class GameImage {
 
     update(){
         this.moveWithPerspective();
-        if (this.percentTraveled < 1) this.fadeAlpha(0.1) 
+        if (this.percentTraveled < 1) this.fadeAlpha(0.05) 
         else this.fadeAlpha(-0.1)
         if (this.percentTraveled > 1.15) this.markedForDel = true;
     }
@@ -398,33 +419,24 @@ class GameImage {
 }
 
 class Sprite extends GameImage{
-    static unloadedImages = 0;
-    constructor(spriteJson, maxWidth, maxHeight, heightOffset){
-        super(`./images/${spriteJson.meta.image}`, maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
-        this.image.onload = (()=> Sprite.unloadedImages -= 1)
-        Sprite.unloadedImages += 1
-        this.offSetWidth = 0;
-        this.offSetHeight = 0;
+    constructor(bitmaps, maxWidth, maxHeight, heightOffset){
+        super(undefined,  maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
+        this.frames = bitmaps
         this.frame = 0;
-        this.sprite = spriteJson;
-        this.frames = spriteJson.frames
-        this.lastFrameIndex = this.frames.length-1
-        this.loops = true;
+        this.image = this.frames[this.frame]
     }
-    update(){
-        this.updateSourceDimensions()
-        this.frame += 1;
-        if (this.frame>this.frames.length-1) this.frame = this.loops ? 0 : this.frame-1;
+    incrementFrame(num){
+        this.frame += num
+        if (this.frame >= this.frames.length) return;
+        if (this.frame < 0) return;
+        this.image = this.frames[Math.floor(this.frame)]
     }
-    updateSourceDimensions(){
-        let frame = this.frames[this.frame].frame 
-        this.sx = frame.x
-        this.sy = frame.y 
-        this.sw = frame.w
-        this.sh = frame.h
+    setFrame(frame){
+        this.frame = frame;
+        this.image = this.frames[this.frame]
     }
     drawShadow(){
-        return;
+        return
     }
 }
 
@@ -724,9 +736,9 @@ class Pikeman extends Enemy {
 }
 
 class Player{
-    constructor(game,sprites){
-        this.block = sprites.block
-        this.attack = sprites.attack
+    constructor(game, blockBitmaps, attackBitmaps){
+        this.block = new Sprite(blockBitmaps, 842, 609)
+        this.attack = new Sprite(attackBitmaps, 534*0.8, 871*0.8, 200)
         this.block.alpha = 0;
         this.attack.alpha = 0;
         this.game = game;
@@ -768,13 +780,12 @@ class Player{
         this.state.enter();
     }
     receiveAttack(source){
-        console.log(source.lane)
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
         for (let index = 0; index < 30; index++) {
             Projectile.activeProjectiles.push(new PlayerBloodSpurt(source.centerX))  
         }
-        this.recoveryOffset = 80
+        this.recoveryOffset = 120
     }
 }
 
@@ -793,11 +804,10 @@ class Blocking extends State {
         this.player = player
         this.sprite = this.player.block 
         this.sprite.frame = 18;
-        this.sprite.updateSourceDimensions();
         this.frameIncrement = 1;
         this.frameQueue = [18];
         this.positionInQueue = 0;
-        this.frameDestinations = {'middle':18, 'left':0, 'right':35} 
+        this.frameDestinations = {'middle':18, 'left':0, 'right':34} 
         this.middleSkipRange = [12,26] 
         this.earlyFramesToSkip = 5
         this.inputDelayCounter = 0;
@@ -825,8 +835,7 @@ class Blocking extends State {
             
         }
         this.lastInput = input;
-        if (this.positionInQueue !== this.frameQueue.length) this.sprite.frame = this.frameQueue[this.positionInQueue++]
-        this.sprite.updateSourceDimensions()
+        if (this.positionInQueue !== this.frameQueue.length) this.sprite.setFrame(this.frameQueue[this.positionInQueue++])
         this.updateLane()
     }
     makeFrameQueue(input){
@@ -865,7 +874,6 @@ class Attacking extends State {
     enter(){
         this.sprite.alpha = 0;
         this.sprite.frame = 0;
-        this.sprite.updateSourceDimensions()
     }
     update(){
         this.player.block.fadeAlpha(-0.2)
@@ -875,12 +883,10 @@ class Attacking extends State {
         if (attack.frame === 0) {
             this.attackDirection = this.input;
         }
-        attack.frame++;
-        
+        attack.incrementFrame(1)
         if (attack.frame === attack.frames.length-1) {
             this.player.changeState("blocking")
         }
-        attack.updateSourceDimensions()
         this.angleAttack();
     }
     checkCollision(){
@@ -909,20 +915,45 @@ class Attacking extends State {
     }
 }
 
-async function fetchSprites(){
-    let sprites = {}
-    const [atkRep, blockRep, parchmentRep] = await Promise.all([
-        fetch("./sword-attack-v2-compressed.json"),
-        fetch("./sword48.json"),
-        fetch("./parchment.json")])
-    await atkRep.json().then((sprite) => sprites.attack = new Sprite(sprite, 534*0.8, 871*0.8, 200));
-    await blockRep.json().then((sprite) => sprites.block = new Sprite(sprite, 842, 609));
-    await parchmentRep.json().then((sprite) => sprites.parchment = new Sprite(sprite, 850, 140));
-    startGame(sprites);
+async function getSprites(){
+    await getSprite("./sword-attack-v2-compressed.json").then((resp) => bitmaps.attack = resp)
+    updateLoadScreen()
+    await getSprite("./parchment.json").then((resp) => bitmaps.ui = resp)
+    updateLoadScreen()
+    await getSprite("./sword48.json").then((resp) => bitmaps.block = resp)
+    updateLoadScreen()
 };
 
-function startGame(sprites){ 
-    const game = new Game(ctx, canvas.width, canvas.height, sprites)
+async function getSprite(spriteJsonSource){
+    const response = await fetch(spriteJsonSource)
+    const json = await response.json()
+    const bitmaps = await getSpriteImages(json, `./images/${json.meta.image}`)
+    return bitmaps
+}
+
+async function getSpriteImages(spriteJson, spritesheetSrc){
+    let bitmaps = []
+    const sheet = new Image()
+    const json = spriteJson
+    await new Promise(resolve => {
+        sheet.onload = (img)=>{
+            resolve(img)
+        }
+        sheet.src = spritesheetSrc
+    })
+    for (let i = 0; i < json.frames.length-1; i++) {
+        const data = json.frames[i].frame;
+        bitmaps.push(createImageBitmap(sheet, data.x, data.y, data.w, data.h))
+    }
+    await Promise.all(bitmaps).then((response)=> {
+        bitmaps = response
+    })
+    return bitmaps
+}
+    
+
+function startGame(){ 
+    const game = new Game(ctx, canvas.width, canvas.height, bitmaps)
     animate(0,game);  
 }
 function animate(timestamp, game){
