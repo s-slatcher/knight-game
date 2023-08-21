@@ -100,51 +100,63 @@ class UI {
     constructor(game,spriteBitmap){
         this.game = game;
         this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
-        this.sprite.alpha = 0.9;
+        this.sprite.alpha = 0.95;
         this.startFrame = 150
-        this.coinImages = []
         this.coinImage = 0
+        this.centerX = this.sprite.centerX
+        this.centerY = this.sprite.centerY
         this.marginY = 100
         this.marginX = 150
-        this.textUpdateRate = 24
+        this.currentHealth = 1
         this.targetHealth = 1
-        this.actualScore = 0
+        this.currentScore = 0
         this.targetScore = 0
-        this.actualCombo = 0
-        this.targetCombo = 0
+        this.combo = 1
         this.targetCoins = 0
-        this.displayCoins = 0
+        this.currentCoins = 0
         this.initalizeCoins() 
     }    
     initalizeCoins(){
+        this.coinImages = []
         for (let i = 0; i < 6; i++) {
             this.coinImages
-                .push(new GameImage(`./images/coin_pile/${i+1}.png`,80,80,this.marginX+20,GameImage.perspectiveBottomY,-GameImage.perspectiveBottomY+115))
+                .push(new GameImage(`./images/coin_pile/${i+1}.png`,80,80,this.marginX+20,GameImage.bottomY,-885))
             this.coinImages[this.coinImages.length-1].drawShadow = ()=>{return}
         }
     }
-    update(health, score, combo){
+    update(){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.incrementFrame(0.5);
-        if (this.game.totalFrames % (this.game.fps/this.textUpdateRate) !== 1) return;
-        if (this.targetCoins > this.displayCoins) this.updateCoins()
+        if (this.targetCoins > this.currentCoins) this.updateCoins()
+        if (this.targetScore > this.currentScore) this.updateScore()
     }
     updateCoins() {
-        this.displayCoins++
+        this.currentCoins++
         if (this.coinImage === 5) return;
-        if (this.displayCoins > Math.pow((this.coinImage+3),3)) this.coinImage++
+        if (this.currentCoins > Math.pow((this.coinImage+3),3)) this.coinImage++
+    }
+    updateScore() {
+        let difference = this.targetScore - this.currentScore
+        let increment = (Math.sqrt(difference))/5
+        if (increment > 30) increment = 30
+        if (increment < 0.31) increment = 0.3 
+        this.currentScore += increment
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.draw(ctx);
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
-        ctx.fillText(`${this.displayCoins}`, this.marginX + 75, this.marginY)
+        ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
         this.coinImages[this.coinImage].draw(ctx)
+        let displayScore = Math.floor(this.currentScore) 
+        let scoreDimensions = ctx.measureText(`${displayScore}`)
+        ctx.fillText(`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
+        console.log(scoreDimensions)
     }
 
     spawnCoin(PosXAtBase,StartingPerspectiveHeight,heightOffset){
-        Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.marginX,this.marginY+20, this))
+        Projectile.activeProjectiles.push(new Coin(PosXAtBase,StartingPerspectiveHeight,heightOffset,this.marginX,this.marginY, this))
     }
     
     
@@ -173,6 +185,7 @@ class Game{
         this.input;
         this.bitmaps = bitmaps
     }
+
     handleInput(keyRecord, touchRecord){
         if (keyRecord.includes('a') && keyRecord.includes('b') && keyRecord.includes('c')){
             alert("cheats activated")
@@ -197,7 +210,6 @@ class Game{
         this.input = input;
     }
     update(timestamp, keyRecord, touchRecord){
-        
         if (!document.fullscreenElement) {
             document.getElementById("resume-btn").classList.remove("disabled")
             return
@@ -219,7 +231,7 @@ class Game{
     }
     handleBackground(){
         if (this.totalFrames % 32/this.speedModifier === 0) {
-            let start = GameImage.perspectiveStartY
+            let start = GameImage.startY
             this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)+1000,start,40)) 
             this.backgroundElements.unshift(new GameImage("./images/tree.png",643*1.5,921*1.5,(this.width/2)-1000,start,40)) 
             this.backgroundElements[0].alpha = 0;
@@ -294,40 +306,40 @@ class SoundEffect {
 }
 
 class GameImage {
-    static perpsectiveBaseWidth = 1000 
+    static baseWidth = 1000 
     static baseCenterX = canvas.width/2
-    static perspectiveHeight = 800 
-    static perspectiveBottomY = canvas.height
-    static perspectiveTopY = GameImage.perspectiveBottomY - GameImage.perspectiveHeight
-    static perspectiveStartPercentage = 0.25  
-    static perspectiveStartY = GameImage.perspectiveTopY + (GameImage.perspectiveHeight * GameImage.perspectiveStartPercentage)
+    static height = 725 
+    static bottomY = canvas.height
+    static topY = GameImage.bottomY - GameImage.height
+    static startPercentage = 0.22  
+    static startY = GameImage.topY + (GameImage.height * GameImage.startPercentage)
     static scrollSpeed = 8 
     
     static drawRoad(ctx){
         ctx.fillStyle = '#439544'
-        ctx.fillRect(0, GameImage.perspectiveStartY, GameImage.baseCenterX*2, GameImage.perspectiveBottomY-GameImage.perspectiveStartY)
+        ctx.fillRect(0, GameImage.startY, GameImage.baseCenterX*2, GameImage.bottomY-GameImage.startY)
         ctx.beginPath()
-        const perspectiveStartWidth = GameImage.perspectiveStartPercentage * GameImage.perpsectiveBaseWidth
-        const point1X = GameImage.baseCenterX - perspectiveStartWidth/2
-        const point2X = point1X + perspectiveStartWidth
-        const point3X = GameImage.baseCenterX + GameImage.perpsectiveBaseWidth/2
-        const point4X = point3X - GameImage.perpsectiveBaseWidth
-        ctx.moveTo(point1X,GameImage.perspectiveStartY)
-        ctx.lineTo(point2X,GameImage.perspectiveStartY)
-        ctx.lineTo(point3X,GameImage.perspectiveBottomY)
-        ctx.lineTo(point4X,GameImage.perspectiveBottomY)
+        const StartWidth = GameImage.startPercentage * GameImage.baseWidth
+        const point1X = GameImage.baseCenterX - StartWidth/2
+        const point2X = point1X + StartWidth
+        const point3X = GameImage.baseCenterX + GameImage.baseWidth/2
+        const point4X = point3X - GameImage.baseWidth
+        ctx.moveTo(point1X,GameImage.startY)
+        ctx.lineTo(point2X,GameImage.startY)
+        ctx.lineTo(point3X,GameImage.bottomY)
+        ctx.lineTo(point4X,GameImage.bottomY)
         ctx.closePath()
         ctx.fillStyle = "#cfbd86"
         ctx.fill();
     }
 
     constructor(fileSrc, maxWidth, maxHeight, 
-        PosXAtBase=GameImage.baseCenterX, StartingPerspectiveHeight=GameImage.perspectiveStartY, heightOffset = 0){
+        PosXAtBase=GameImage.baseCenterX, StartingPerspectiveHeight=GameImage.startY, heightOffset = 0){
         this.image = new Image()
         this.image.src = fileSrc
         this.sx = 0
         this.sy = 0
-        this.percentTraveled = ((StartingPerspectiveHeight)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight 
+        this.percentTraveled = ((StartingPerspectiveHeight)-GameImage.topY) / GameImage.height 
         this.PosXAtBase = PosXAtBase
         this.relativeSpeed = 0
         this.maxWidth = maxWidth
@@ -342,12 +354,12 @@ class GameImage {
         this.angle = 0
         this.alpha = 1
         this.flipped = false;
-        this.distanceFromBase = GameImage.perspectiveBottomY - StartingPerspectiveHeight  
+        this.distanceFromBase = GameImage.bottomY - StartingPerspectiveHeight  
         this.markedForDel = false;      
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
-    get perspectiveHeight(){return this.dy+this.dh}
+    get Height(){return this.dy+this.dh}
     get lane(){
             if (this.maxCenterOffset < -50) return "left"
             if (this.maxCenterOffset > 50) return "right"
@@ -361,36 +373,38 @@ class GameImage {
         if (this.percentTraveled > 1.15) this.markedForDel = true;
     }
     moveWithPerspective(){
-        this.percentTraveled = ((this.perspectiveHeight)-GameImage.perspectiveTopY) / GameImage.perspectiveHeight
+        
         if (this.percentTraveled > 1.5) return;
         const speed = (GameImage.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
-        this.distanceFromBase -= speed
+        let distanceFromBase = (1-this.percentTraveled)*GameImage.height - speed
         this.dw = this.percentTraveled * this.maxWidth
         this.dh = this.percentTraveled * this.maxHeight
-        this.dy = (GameImage.perspectiveBottomY - this.distanceFromBase) - this.dh
+        this.dy = (GameImage.bottomY - distanceFromBase) - this.dh
         this.dx = GameImage.baseCenterX - this.dw/2
+        this.percentTraveled = ((this.Height)-GameImage.topY) / GameImage.height
     }
     draw(ctx){
         const {image, sx, sy, sw, sh, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled 
         const centerOffset = this.maxCenterOffset * this.percentTraveled
         ctx.save()
-        if (this.flipped) this.flipHorizontal(ctx);    
-        if (this.angle !== 0) this.rotate(ctx)
-        this.drawShadow(ctx)
+        if (this.flipped) this.flipHorizontal(ctx); 
+        this.drawShadow(ctx)   
+        this.rotate(ctx)
         ctx.globalAlpha = this.alpha
-        if (this.sw && this.sh) ctx.drawImage(image, sx, sy, sw, sh, dx + centerOffset , dy + heightOffset, dw, dh)
-        else ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
+        ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
         ctx.restore();
     }
     drawShadow(ctx){
+        return;
         if (this.percentTraveled > 1.25) return;
         const centerX = this.centerX
-        const centerY = this.perspectiveHeight - 10
+        const centerY = this.Height - 10
         let sizeMulti = 1 + -this.maxHeightOffset/500
         if (sizeMulti < 1) sizeMulti = 1; 
         const alpha = 0.5 * (1/(Math.pow(sizeMulti,2)))
         ctx.beginPath()
+        console.log(sizeMulti, this.dw)
         ctx.arc(centerX,centerY,this.dw * sizeMulti,0,2*Math.PI);
         const gradient = ctx.createRadialGradient(centerX, centerY, this.dw/5 * sizeMulti, centerX, centerY, this.dw/1.5 * sizeMulti)
         gradient.addColorStop(0, `rgba(0,0,0,${alpha})`)
@@ -404,6 +418,7 @@ class GameImage {
         ctx.restore()
     }
     rotate(ctx){
+        if (this.angle === 0) return; 
         ctx.translate(this.centerX,this.centerY)
         ctx.rotate(this.angle)
         ctx.translate(-(this.centerX),-(this.centerY))
@@ -431,7 +446,7 @@ class GameImage {
 
 class Sprite extends GameImage{
     constructor(bitmaps, maxWidth, maxHeight, heightOffset){
-        super(undefined,  maxWidth, maxHeight, GameImage.baseCenterX, GameImage.perspectiveBottomY, heightOffset)
+        super(undefined,  maxWidth, maxHeight, GameImage.baseCenterX, GameImage.bottomY, heightOffset)
         this.frames = bitmaps
         this.frame = 0;
         this.image = this.frames[this.frame]
@@ -460,7 +475,7 @@ class Projectile extends GameImage {
         this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2)) || 0
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
-        this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in perspective)
+        this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in )
     }
     update(){
         this.maxCenterOffset += this.velX
@@ -475,7 +490,7 @@ class Projectile extends GameImage {
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
-            40*0.5, 150*0.5, posX, GameImage.perspectiveBottomY, heightOffset, velTotal, 
+            40*0.5, 150*0.5, posX, GameImage.bottomY, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), randomValue(0.001,0.005)*velX)
         this.gravity = 3
         this.alpha = 1
@@ -558,7 +573,7 @@ class BloodSpurt extends Projectile {
 class PlayerBloodSpurt extends Projectile {
     constructor(PosXAtBase){
         super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
-            50, 50, PosXAtBase, GameImage.perspectiveBottomY, -150, randomValue(5,15), 
+            50, 50, PosXAtBase, GameImage.bottomY, -150, randomValue(5,15), 
             randomValue(-5,5), 0, 0)
         this.alpha = 0.75
         this.relativeSpeed = this.velY * randomValue(0,1)
@@ -676,9 +691,9 @@ class Enemy{
         return this.image.lane
     }
     spawnCoins(amount){
-        const {PosXAtBase,perspectiveHeight,maxHeight} = this.image
+        const {PosXAtBase,Height,maxHeight} = this.image
         for (let i = 0; i < amount; i++) {
-           this.game.UI.spawnCoin(PosXAtBase,perspectiveHeight,-maxHeight/2) 
+           this.game.UI.spawnCoin(PosXAtBase,Height,-maxHeight/2) 
         } 
     }
     
@@ -715,8 +730,8 @@ class Crossbowman extends Enemy {
     attack(){    
         this.state = "fired"
         this.image.swapImage('./images/gaurd_nobolt.png')
-        const {PosXAtBase,perspectiveHeight,maxHeight} = this.image
-        Projectile.activeProjectiles.push(new FiredArrow(PosXAtBase,perspectiveHeight,-maxHeight/2, this.game.player))
+        const {PosXAtBase,Height,maxHeight} = this.image
+        Projectile.activeProjectiles.push(new FiredArrow(PosXAtBase,Height,-maxHeight/2, this.game.player))
         
     }
     receiveAttack(){
@@ -725,12 +740,13 @@ class Crossbowman extends Enemy {
         this.image.swapImage('./images/gaurd_dead_bloody.png')
         this.sfx.death.play();
         this.sfx.death2.play();
-        const {PosXAtBase,perspectiveHeight,maxHeight, flipped} = this.image
-        Projectile.activeProjectiles.push(new DroppedCrossbow(PosXAtBase, perspectiveHeight, -maxHeight/2, flipped))
+        const {PosXAtBase,Height,maxHeight, flipped} = this.image
+        Projectile.activeProjectiles.push(new DroppedCrossbow(PosXAtBase, Height, -maxHeight/2, flipped))
         for (let index = 0; index < 40; index++) {
-            Projectile.activeProjectiles.push(new BloodSpurt(PosXAtBase, perspectiveHeight, -maxHeight/2))    
+            Projectile.activeProjectiles.push(new BloodSpurt(PosXAtBase, Height, -maxHeight/2))    
         }
         this.spawnCoins(5)
+        this.game.UI.targetScore += randomValue(-1,10) < 0 ? 1000 : 10
     }
     fadeAlpha(num){
         this.image.fadeAlpha(num)
@@ -798,6 +814,7 @@ class Player{
             Projectile.activeProjectiles.push(new PlayerBloodSpurt(source.centerX))  
         }
         this.recoveryOffset = 120
+        this.changeState("blocking")
     }
 }
 
@@ -835,7 +852,7 @@ class Blocking extends State {
     update(input){
         this.player.attack.fadeAlpha(-0.2)
         this.sprite.fadeAlpha(0.2)
-        if (input === 'attack'){
+        if (input === 'attack' && this.player.recoveryOffset < 20){
             this.player.changeState("attacking")
             return;
         }
@@ -844,7 +861,6 @@ class Blocking extends State {
         if (input !== this.lastInput) {
             this.inputDelayCounter = 4;
             this.makeFrameQueue(input)
-            
         }
         this.lastInput = input;
         if (this.positionInQueue !== this.frameQueue.length) this.sprite.setFrame(this.frameQueue[this.positionInQueue++])
