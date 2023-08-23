@@ -6,7 +6,7 @@ const pauseMenu = document.getElementById("pauseMenu")
 const canvasContainer = document.getElementById("canvas-container")
 const resumeButton = document.getElementById("resume-btn")
 const startButton = document.getElementById("start-btn")
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d',{ alpha: false });
 const keyRecord = [];
 const touchRecord = {};
 const bitmaps = {}
@@ -100,7 +100,6 @@ class UI {
     constructor(game,spriteBitmap){
         this.game = game;
         this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
-        this.sprite.alpha = 0.95;
         this.startFrame = 150
         this.coinImage = 0
         this.centerX = this.sprite.centerX
@@ -110,7 +109,7 @@ class UI {
         this.currentHealth = 1
         this.targetHealth = 1
         this.currentScore = 0
-        this.targetScore = 0
+        this.targetScore = 1000000
         this.combo = 1
         this.targetCoins = 0
         this.currentCoins = 0
@@ -186,18 +185,16 @@ class Game{
         this.altCanvas.width = width
         this.altCanvas.height = height
         this.ctxAlt = this.altCanvas.getContext("2d")
-        this.ctxAlt.filter = "blur(5px)"
         this.shadowImg = new Image()
         this.shadowImg.src = "./images/shadow_circle.png"
         this.initalizeGame();
+
+        this.frameCounter = 0
     }
     initalizeGame(){
         for (let i = 0; i < 9; i++) {
             for (let i = 0; i < 40; i++) {
-                this.backgroundElements.forEach((e)=> {
-                    e.moveWithPerspective()
-                    e.alpha = 1;
-                })
+                this.backgroundElements.forEach((e)=> e.moveWithPerspective())
             }
             this.createDuelTrees()
         }
@@ -219,25 +216,23 @@ class Game{
             Projectile.activeProjectiles = Projectile.activeProjectiles.filter((e)=>!e.markedForDel)
             if (Sprite.unloadedImages > 0) return;
             this.draw(this.ctx);
-        }
     }
+}
     handleBackground(){
         if (this.totalFrames % 40/this.speedModifier === 0)this.createDuelTrees();
         this.backgroundElements = this.backgroundElements.filter(e=>!e.markedForDel)
         this.backgroundElements.forEach((e)=>{
             e.moveWithPerspective();
-            if (e.percentTraveled < 1) e.fadeAlpha(0.05) 
-            else e.fadeAlpha(-0.1)
-            if (e.percentTraveled > 1.15) e.markedForDel = true;
+            if (e.percentTraveled > 0.9) e.markedForDel = true;
         })
     }
     createDuelTrees(){
         let start = GameImage.startY
         this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)+1200,start,80)) 
         this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)-1200,start,80))
-        this.backgroundElements[0].alpha = 0;
+        //this.backgroundElements[0].alpha = 0;
         this.backgroundElements[0].flipped = true;
-        this.backgroundElements[1].alpha = 0;  
+        //this.backgroundElements[1].alpha = 0;  
     }
     handleEnemies(){
         let center = this.width/2
@@ -252,7 +247,6 @@ class Game{
         let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
         if (this.enemiesDue > 0) {
             const newEnemy = new Crossbowman(this, this.width/2 - 500*roadSide)
-            newEnemy.image.alpha = 0;
             if (roadSide === -1) newEnemy.image.flipped = true;
             this.enemies.unshift(newEnemy)
             this.framesSinceCrossbowman = 0;
@@ -267,18 +261,11 @@ class Game{
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctxAlt.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
-        const toDraw = this.backgroundElements
-                        .concat(this.enemies.map((e)=>e.image))
-                        .sort((a,b)=> a.percentTraveled - b.percentTraveled)
-        this.drawShadows(toDraw)
-        // this.backgroundElements.forEach(e=>e.drawShadow(this.ctxAlt, this.shadowImg))
-        // this.enemies.forEach(e=>e.image.drawShadow(this.ctxAlt, this.shadowImg))
-        // this.ctx.globalAlpha = 0.5
-        // this.ctxAlt.clearRect(0,0,this.width,GameImage.startY)
-        // this.ctx.drawImage(this.altCanvas,0,0,this.width,this.height)
-        // this.ctx.globalAlpha = 1
-        // this.backgroundElements.forEach((e) => e.draw(this.ctx))
-        // this.enemies.forEach(e => e.draw(this.ctx))
+        let toDraw = this.backgroundElements
+                        .concat(this.enemies)
+        
+        //if (this.totalFrames % 100 === 0) toDraw = toDraw.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        this.drawShadows(this.backgroundElements.concat(this.enemies.map(e=>e.image)))
         toDraw.forEach(e=>e.draw(this.ctx))
         Projectile.activeProjectiles.forEach((e) => e.draw(this.ctx))
         this.player.draw(this.ctx)
@@ -289,14 +276,14 @@ class Game{
             const y = e.imageBaseY - e.dh/10
             const width = e.dw*1.1
             this.ctxAlt.globalAlpha = e.alpha
-            this.ctxAlt.drawImage(this.shadowImg, e.centerX-width/2, y, width, width*0.3)
+            this.ctxAlt.drawImage(this.shadowImg, Math.floor((e.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(width*0.3+0.5))
         })
         this.ctx.globalAlpha = 0.4
         this.ctxAlt.clearRect(0,0,this.width,GameImage.startY)
         this.ctx.drawImage(this.altCanvas,0,0,this.width,this.height)
         this.ctx.globalAlpha = 1
     }
-    drawStaticBackground(ctx){  //replace this image so im not making a new gradient every frame
+    drawStaticBackground(ctx){
         const gradient = ctx.createLinearGradient(0,0,0,200)
         gradient.addColorStop(1,"#b5dae5")
         gradient.addColorStop(0,"#0072b6")
@@ -306,6 +293,7 @@ class Game{
     }
     getFramesDue(timestamp){
         const frameTime = timestamp - this.lastTimeStamp
+        
         this.frameTimeDeficit += frameTime;
         this.lastTimeStamp = timestamp;
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
@@ -409,31 +397,24 @@ class GameImage {
             return "middle"
         }
     moveWithPerspective(){
-        if (this.percentTraveled > 1.5) return;
         const speed = (GameImage.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
         let distanceFromBase = (1-this.percentTraveled)*GameImage.height - speed
-        this.dw = this.percentTraveled * this.maxWidth
-        this.dh = this.percentTraveled * this.maxHeight
+        this.dw = (this.percentTraveled * this.maxWidth)
+        this.dh = (this.percentTraveled * this.maxHeight)
         this.dy = (GameImage.bottomY - distanceFromBase) - this.dh
-        this.dx = GameImage.baseCenterX - this.dw/2
+        this.dx = (GameImage.baseCenterX - this.dw/2)
         this.percentTraveled = ((this.imageBaseY)-GameImage.topY) / GameImage.height
     }
     draw(ctx){
         const {image, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled 
         const centerOffset = this.maxCenterOffset * this.percentTraveled
-        ctx.save()
+        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save()
         if (this.flipped) this.flipHorizontal(ctx);  
         this.rotate(ctx)
         ctx.globalAlpha = this.alpha
-        ctx.drawImage(image, dx + centerOffset, dy + heightOffset, dw, dh)
-        ctx.restore();
-    }
-    drawShadow(ctx,shadow){
-        const y = this.imageBaseY - this.dh/10
-        const width = this.dw*1.1
-        ctx.globalAlpha = this.alpha
-        ctx.drawImage(shadow, this.centerX-width/2, y, width, width*0.3)
+        ctx.drawImage(image, Math.floor(dx + centerOffset + 0.5), dy + heightOffset, Math.floor(dw+0.5), Math.floor(dh+0.5))
+        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.restore();
     }
     rotate(ctx){
         if (this.angle === 0) return; 
@@ -491,6 +472,7 @@ class Projectile extends GameImage {
         this.angle = initialAngle
         this.rotationSpeed = rotationSpeed //full rotations per frame
         this.gravity = 1.5; //pixel-per-frame velY that is lost each frame (when obj is at max closeness in )
+        this.framesActive = 0;
     }
     update(){
         this.maxCenterOffset += this.velX
@@ -512,8 +494,7 @@ class BlockedArrow extends Projectile {
     update(){
         super.update()
         this.velX -= 0.5*Math.sign(this.velX)
-        if (this.maxHeightOffset > 50) this.fadeAlpha(-0.2)
-        if (this.alpha === 0) this.markedForDel = true;
+        if (this.maxHeightOffset > 0) this.markedForDel = true;
     }
 }
 
@@ -559,7 +540,7 @@ class DroppedCrossbow extends Projectile {
             this.velX = 0;
         }
         this.fadeAlpha(-0.01)
-        if (this.percentTraveled > 1.15) this.markedForDel = true
+        if (this.percentTraveled > 1.1) this.markedForDel = true
     }
 }
 
@@ -574,44 +555,13 @@ class BloodSpurt extends Projectile {
     update(){
         super.update()
         this.moveWithPerspective();
-        this.fadeAlpha(-0.01)
-        if (this.alpha === 0) this.markedForDel = true
+        this.framesActive += 1
+        if (this.framesActive = 20) this.markedForDel = true
         if (this.maxHeightOffset > 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
             this.relativeSpeed = 0
         }
-    }
-}
-
-class PlayerBloodSpurt extends Projectile {
-    constructor(posXAtBase){
-        super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
-            50, 50, posXAtBase, GameImage.bottomY, -150, randomValue(5,15), 
-            randomValue(-5,5), 0, 0)
-        this.alpha = 0.75
-        this.relativeSpeed = this.velY * randomValue(0,1)
-        this.streakOnScreen = GameImage.scrollSpeed+this.relativeSpeed > 0
-        this.velY = this.streakOnScreen ? randomValue(0,5) : this.velY
-        this.gravity = 0.1
-    }
-    update(){
-        super.update()
-        this.moveWithPerspective();
-        if (this.streakOnScreen) {
-            this.relativeSpeed = -6
-            this.velX *= 0.95
-            this.fadeAlpha(-0.02)
-        } else {
-            this.fadeAlpha(-0.02)
-            if (this.maxHeightOffset > 0){
-            this.maxHeightOffset = 0;
-            this.velX = 0;
-            this.relativeSpeed = 0
-        }
-        }
-        if (this.alpha === 0) this.markedForDel = true
-        
     }
 }
 
@@ -649,50 +599,6 @@ class Coin extends Projectile{
     }
 }
 
-class Ball extends Projectile {
-    constructor(){
-        super(`./images/football.png`,120,120,
-                650, 700, -300, 0,0)
-        this.velY = 0
-        this.velX = 0
-        this.velZ = 0
-        this.gravity = 3
-    }
-    update(){
-        this.moveWithPerspective();
-        this.maxHeightOffset -= this.velY
-        this.maxCenterOffset += this.velX
-        this.relativeSpeed = -this.velZ
-        if (this.maxHeightOffset < 0) {
-            this.velY -= this.gravity
-        }
-        else {
-            this.maxHeightOffset = 0;
-            this.velY *= -0.8
-            this.velY -= 5
-            this.velZ -= 0.25
-            this.velX -= 0.1 * Math.sign(this.velX)
-            if (this.velY < 0.5) this.velY = 0
-        }
-        
-        if (this.velZ > 0.1){
-            this.airResist = Math.pow(this.velZ,2)/2000 
-            this.velZ -= this.airResist
-        } else this.velZ = 0
-        if (Math.abs(this.velX) > 0.1){
-            this.airResist = Math.pow(this.velX,2)/2000 * Math.sign(this.velX)
-            this.velX -= this.airResist
-        } else this.velX = 0
-
-        if (this.percentTraveled > 1){
-            this.velY = 40*randomValue(1,1.5)
-            this.velZ = 90-this.velY
-            this.velX = randomValue(-10,10)
-        }
-        
-    }
-}
-
 
 class Enemy{
     constructor(game, baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY){
@@ -719,7 +625,7 @@ class Enemy{
 class Crossbowman extends Enemy {
     constructor(game, posXAtBase, startingY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, posXAtBase, startingY)
-        this.alpha = 0;
+        this.alpha = 1;
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
@@ -731,12 +637,11 @@ class Crossbowman extends Enemy {
     
     update(){
         this.image.moveWithPerspective()
-        if (this.state === this.states.unloaded) this.fadeAlpha(1/6)
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
         }
-        if (this.percentTraveled > 1.15) this.markedForDel = true;
+        if (this.image.percentTraveled > 1.1) this.markedForDel = true;
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
     }
@@ -782,42 +687,22 @@ class Player{
     constructor(game, blockBitmaps, attackBitmaps){
         this.block = new Sprite(blockBitmaps, 842, 609)
         this.attack = new Sprite(attackBitmaps, 534*0.8, 871*0.8, 200)
-        this.block.alpha = 0;
-        this.attack.alpha = 0;
+        this.block.alpha = 1;
+        this.attack.alpha = 1;
         this.game = game;
         this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
         this.lane = this.game.lanes["middle"]
         this.state = this.states.blocking;
-        this.angleCounter = 0;
-        this.bounceOffset = 0
-        this.recoveryOffset = 0
         this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
                         new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
 
     }
     update(input){
         this.state.update(input);
-        this.addBounce()
     }
     draw(ctx){
-        this.attack.draw(ctx)
-        this.block.maxHeightOffset += this.bounceOffset
-        this.block.draw(ctx)
-        this.block.maxHeightOffset -= this.bounceOffset
+        this.state.draw(ctx)
     }
-    addBounce() {
-        this.angleCounter += 1/10
-        let mod = 20
-        let unmodBounceOffset = Math.sin(this.angleCounter)
-        if (this.recoveryOffset > 1) {
-            this.recoveryOffset -=  2 * (this.recoveryOffset/20)
-            mod *= (1/this.recoveryOffset)
-        } else this.recoveryOffset = 0
-        if (unmodBounceOffset > 0) mod *= -1
-        this.bounceOffset = unmodBounceOffset * mod * this.game.speedModifier + this.recoveryOffset
-        
-    }
-    
     changeState(state){
         this.state.exit();
         this.state = this.states[state]
@@ -826,9 +711,6 @@ class Player{
     receiveAttack(source){
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
-        for (let index = 0; index < 30; index++) {
-            Projectile.activeProjectiles.push(new PlayerBloodSpurt(source.centerX))  
-        }
         this.recoveryOffset = 120
         this.changeState("blocking")
     }
@@ -856,19 +738,20 @@ class Blocking extends State {
         this.middleSkipRange = [12,26] 
         this.earlyFramesToSkip = 5
         this.inputDelayCounter = 0;
+        this.angleCounter = 0;
+        this.bounceOffset = 0
+        this.recoveryOffset = 0
         this.lastInput = 'middle'
     }
     enter(){
-        this.sprite.alpha = 0;
     }
     exit(){
         this.inputDelayCounter = 0;
         this.updateLane();
     }
     update(input){
-        this.player.attack.fadeAlpha(-0.2)
         this.sprite.fadeAlpha(0.2)
-        if (input === 'attack' && this.player.recoveryOffset < 20){
+        if (input === 'attack' && this.recoveryOffset < 20){
             this.player.changeState("attacking")
             return;
         }
@@ -880,7 +763,13 @@ class Blocking extends State {
         }
         this.lastInput = input;
         if (this.positionInQueue !== this.frameQueue.length) this.sprite.setFrame(this.frameQueue[this.positionInQueue++])
+        this.addBounce()
         this.updateLane()
+    }
+    draw(ctx){
+        this.sprite.maxHeightOffset += this.bounceOffset
+        this.sprite.draw(ctx)
+        this.sprite.maxHeightOffset -= this.bounceOffset
     }
     makeFrameQueue(input){
         this.frameQueue = [];
@@ -897,6 +786,17 @@ class Blocking extends State {
         if(Math.abs(frame - frameEnd) > this.sprite.frames.length/2) {
             this.frameQueue = this.frameQueue.filter((e) => e < this.middleSkipRange[0] || e > this.middleSkipRange[1])
         }
+    }
+    addBounce() {
+        this.angleCounter += 1/10
+        let mod = 20
+        let unmodBounceOffset = Math.sin(this.angleCounter)
+        if (this.recoveryOffset > 1) {
+            this.recoveryOffset -=  2 * (this.recoveryOffset/20)
+            mod *= (1/this.recoveryOffset)
+        } else this.recoveryOffset = 0
+        if (unmodBounceOffset > 0) mod *= -1
+        this.bounceOffset = unmodBounceOffset * mod * this.player.game.speedModifier + this.recoveryOffset
     }
     updateLane(){
         if (this.inputDelayCounter > 0) return
@@ -916,11 +816,12 @@ class Attacking extends State {
         this.game = this.player.game
     }
     enter(){
-        this.sprite.alpha = 0;
-        this.sprite.frame = 0;
+        
+    }
+    exit(){
+        this.sprite.frame = 0
     }
     update(){
-        this.player.block.fadeAlpha(-0.2)
         this.sprite.fadeAlpha(0.2)
         this.checkCollision();
         const attack = this.sprite
@@ -932,6 +833,9 @@ class Attacking extends State {
             this.player.changeState("blocking")
         }
         this.angleAttack();
+    }
+    draw(ctx){
+        if (this.sprite.frame != 0)this.sprite.draw(ctx)
     }
     checkCollision(){
         if (this.sprite.frame < this.activeFrameRange[0] || 
@@ -1001,6 +905,7 @@ function startGame(){
     animate(0,game);  
 }
 function animate(timestamp, game){
+    console.log(Math.floor(timestamp-game.lastTimeStamp))
     game.update(timestamp, keyRecord, touchRecord)
     
     requestAnimationFrame((timestamp)=>{
