@@ -145,11 +145,11 @@ class UI {
         this.sprite.draw(ctx);
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
-        ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
+        ctx.fillText(`${this.currentCoins}`, Math.floor((this.marginX + 75)+0.5), Math.floor((this.centerY+15)+0.5))
         this.coinImages[this.coinImage].draw(ctx)
         let displayScore = Math.floor(this.currentScore) 
         let scoreDimensions = ctx.measureText(`${displayScore}`)
-        ctx.fillText(`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
+        ctx.fillText(`${displayScore}`, Math.floor((this.centerX - (scoreDimensions.width/2))+0.5), Math.floor((this.centerY+15)+0.5))
     }
 
     spawnCoin(posXAtBase,startingY,heightOffset){
@@ -223,6 +223,7 @@ class Game{
         this.backgroundElements = this.backgroundElements.filter(e=>!e.markedForDel)
         this.backgroundElements.forEach((e)=>{
             e.moveWithPerspective();
+            e.fadeAlpha(0.25)
             if (e.percentTraveled > 0.9) e.markedForDel = true;
         })
     }
@@ -230,9 +231,9 @@ class Game{
         let start = GameImage.startY
         this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)+1200,start,80)) 
         this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)-1200,start,80))
-        //this.backgroundElements[0].alpha = 0;
+        this.backgroundElements[0].alpha = 0;
         this.backgroundElements[0].flipped = true;
-        //this.backgroundElements[1].alpha = 0;  
+        this.backgroundElements[1].alpha = 0;  
     }
     handleEnemies(){
         let center = this.width/2
@@ -907,7 +908,6 @@ function startGame(){
 function animate(timestamp, game){
     console.log(Math.floor(timestamp-game.lastTimeStamp))
     game.update(timestamp, keyRecord, touchRecord)
-    
     requestAnimationFrame((timestamp)=>{
         
         animate(timestamp, game)
