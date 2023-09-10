@@ -109,10 +109,11 @@ class UI {
         this.currentHealth = 1
         this.targetHealth = 1
         this.currentScore = 0
-        this.targetScore = 1000000
+        this.targetScore = 0
         this.combo = 1
         this.targetCoins = 0
         this.currentCoins = 0
+        this.scoreIncreaseDisplay = 0
         this.initalizeCoins() 
     }    
     initalizeCoins(){
@@ -135,21 +136,37 @@ class UI {
     }
     updateScore() {
         let difference = this.targetScore - this.currentScore
-        let increment = (Math.sqrt(difference))/5
-        if (increment > 30) increment = 30
-        if (increment < 0.31) increment = 0.3 
+        let increment = (Math.sqrt(difference))/3
+        if (increment > 200) increment = 200
+        if (increment < 0.2) increment = 0.2
         this.currentScore += increment
+        
+    }
+    addScore(num){
+        let score = num * this.combo
+        this.targetScore += score
+        this.scoreIncreaseDisplay += score
+        if (num > 5) this.combo += 1
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.draw(ctx);
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
-        ctx.fillText(`${this.currentCoins}`, Math.floor((this.marginX + 75)+0.5), Math.floor((this.centerY+15)+0.5))
+        ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
         this.coinImages[this.coinImage].draw(ctx)
-        let displayScore = Math.floor(this.currentScore) 
+        let displayScore = Math.floor(this.currentScore)
+        let remainder = this.targetScore - displayScore
         let scoreDimensions = ctx.measureText(`${displayScore}`)
-        ctx.fillText(`${displayScore}`, Math.floor((this.centerX - (scoreDimensions.width/2))+0.5), Math.floor((this.centerY+15)+0.5))
+        ctx.fillText(`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
+        if(remainder > 1) {
+            ctx.font = "30px Lugrasimo"
+            ctx.fillText(`+${this.scoreIncreaseDisplay}`,this.centerX + (scoreDimensions.width/2) + 5, this.centerY+15)
+            ctx.font = "45px Lugrasimo"
+        } else {
+            this.scoreIncreaseDisplay = 0;
+        }
+        ctx.fillText(`ₓ${this.combo}`, this.game.width-this.marginX-75, this.centerY+15)
     }
 
     spawnCoin(posXAtBase,startingY,heightOffset){
@@ -262,11 +279,8 @@ class Game{
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctxAlt.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
-        let toDraw = this.backgroundElements
-                        .concat(this.enemies)
-        
-        //if (this.totalFrames % 100 === 0) toDraw = toDraw.sort((a,b)=> a.percentTraveled - b.percentTraveled)
         this.drawShadows(this.backgroundElements.concat(this.enemies.map(e=>e.image)))
+        const toDraw = this.backgroundElements.concat(this.enemies)
         toDraw.forEach(e=>e.draw(this.ctx))
         Projectile.activeProjectiles.forEach((e) => e.draw(this.ctx))
         this.player.draw(this.ctx)
@@ -414,7 +428,8 @@ class GameImage {
         if (this.flipped) this.flipHorizontal(ctx);  
         this.rotate(ctx)
         ctx.globalAlpha = this.alpha
-        ctx.drawImage(image, Math.floor(dx + centerOffset + 0.5), dy + heightOffset, Math.floor(dw+0.5), Math.floor(dh+0.5))
+        ctx.drawImage(image, (dx + centerOffset), dy + heightOffset, (dw), (dh))
+        //ctx.drawImage(image, Math.floor(dx + centerOffset + 0.5), dy + heightOffset, Math.floor(dw+0.5), Math.floor(dh+0.5))
         if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.restore();
     }
     rotate(ctx){
@@ -522,7 +537,7 @@ class FiredArrow extends Projectile {
             const velocityDirection = -Math.sign(this.velX)
             const arrowDestinationX = GameImage.baseCenterX + velocityDirection*150
             Projectile.activeProjectiles.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
-            this.game.UI.targetScore += 2
+            this.game.UI.addScore(2)
         } else this.player.receiveAttack(this)
         
     }
@@ -670,7 +685,7 @@ class Crossbowman extends Enemy {
             Projectile.activeProjectiles.push(new BloodSpurt(posXAtBase, imageBaseY, -maxHeight/2))    
         }
         this.spawnCoins(5)
-        this.game.UI.targetScore += 5
+        this.game.UI.addScore(10)
     }
     fadeAlpha(num){
         this.image.fadeAlpha(num)
@@ -712,7 +727,8 @@ class Player{
     receiveAttack(source){
         let sfxChoice = Math.floor(randomValue(0,4))
         this.sfx.hurt[sfxChoice].play();
-        this.recoveryOffset = 120
+        this.states.blocking.recoveryOffset = 120
+        this.game.UI.combo = 1
         this.changeState("blocking")
     }
 }
@@ -752,6 +768,8 @@ class Blocking extends State {
     }
     update(input){
         this.sprite.fadeAlpha(0.2)
+        this.addBounce()
+        this.updateLane()
         if (input === 'attack' && this.recoveryOffset < 20){
             this.player.changeState("attacking")
             return;
@@ -764,8 +782,7 @@ class Blocking extends State {
         }
         this.lastInput = input;
         if (this.positionInQueue !== this.frameQueue.length) this.sprite.setFrame(this.frameQueue[this.positionInQueue++])
-        this.addBounce()
-        this.updateLane()
+        
     }
     draw(ctx){
         this.sprite.maxHeightOffset += this.bounceOffset
@@ -798,6 +815,7 @@ class Blocking extends State {
         } else this.recoveryOffset = 0
         if (unmodBounceOffset > 0) mod *= -1
         this.bounceOffset = unmodBounceOffset * mod * this.player.game.speedModifier + this.recoveryOffset
+        
     }
     updateLane(){
         if (this.inputDelayCounter > 0) return
@@ -906,7 +924,6 @@ function startGame(){
     animate(0,game);  
 }
 function animate(timestamp, game){
-    console.log(Math.floor(timestamp-game.lastTimeStamp))
     game.update(timestamp, keyRecord, touchRecord)
     requestAnimationFrame((timestamp)=>{
         
