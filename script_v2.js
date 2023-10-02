@@ -101,26 +101,36 @@ class UI {
         this.game = game;
         this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
         this.startFrame = 150
-        this.coinImage = 0
+        
         this.centerX = this.sprite.centerX
         this.centerY = this.sprite.centerY
         this.marginY = 100
         this.marginX = 150
-        this.currentHealth = 1
-        this.targetHealth = 1
+        this.health = 1
         this.currentScore = 0
         this.targetScore = 0
         this.combo = 1
         this.targetCoins = 0
         this.currentCoins = 0
         this.scoreIncreaseDisplay = 0
-        this.initalizeCoins() 
-    }    
-    initalizeCoins(){
+        this.healthOverlays = []
         this.coinImages = []
+        this.coinImage = 0
+        this.createCoins() 
+        this.createHealthOverlays()
+    }    
+    createCoins(){
+        this.coinImages.push(new GameImage("",0,0))
         for (let i = 0; i < 6; i++) {
             this.coinImages
                 .push(new GameImage(`./images/coin_pile/${i+1}.png`,80,80,this.marginX+20,GameImage.bottomY,-885))
+        }
+    }
+    createHealthOverlays(){
+        this.healthOverlays.push(new GameImage("",0,0))
+        for (let i = 0; i < 4; i++){
+            this.healthOverlays
+                .push(new GameImage(`./images/health/stage${i+1}.png`,1000,1000,undefined,GameImage.bottomY))
         }
     }
     update(){
@@ -131,7 +141,8 @@ class UI {
     }
     updateCoins() {
         this.currentCoins++
-        if (this.coinImage === 5) return;
+        if (this.coinImage === 0) this.coinImage++
+        if (this.coinImage === 6) return;
         if (this.currentCoins > Math.pow((this.coinImage+3),3)) this.coinImage++
     }
     updateScore() {
@@ -151,6 +162,7 @@ class UI {
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
         this.sprite.draw(ctx);
+        this.drawHealthOverlay(ctx)
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
         ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
@@ -168,7 +180,11 @@ class UI {
         }
         ctx.fillText(`ₓ${this.combo}`, this.game.width-this.marginX-75, this.centerY+15)
     }
-
+    drawHealthOverlay(ctx){
+        let healthImageIndex = Math.ceil(5-(this.health*5))
+        console.log(healthImageIndex)
+        this.healthOverlays[healthImageIndex].draw(ctx)
+    }
     spawnCoin(posXAtBase,startingY,heightOffset){
         Projectile.activeProjectiles.push(new Coin(posXAtBase,startingY,heightOffset,this.marginX,this.marginY, this))
     }
@@ -726,6 +742,7 @@ class Player{
     }
     receiveAttack(source){
         let sfxChoice = Math.floor(randomValue(0,4))
+        this.game.UI.health -= 0.1
         this.sfx.hurt[sfxChoice].play();
         this.states.blocking.recoveryOffset = 120
         this.game.UI.combo = 1
