@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadNoSprites = true; //gets empty sprite files, game loads instantly but no visible player or banner  
+const loadNoSprites = false; //gets empty sprite files, game loads instantly but no visible player or banner  
 
 const canvas = document.getElementById("canvas1");
 const canvas2 = document.createElement("canvas")
@@ -108,7 +108,6 @@ class UI {
         this.centerY = this.sprite.centerY
         this.marginY = 100
         this.marginX = 150
-        this.health = 1
         this.currentScore = 0
         this.targetScore = 0
         this.combo = 1
@@ -137,14 +136,10 @@ class UI {
     }
     update(){
         if (this.game.totalFrames < this.startFrame) return;
-        if (this.health <= 0) {
-
-        }
-        else {
         this.sprite.incrementFrame(0.5);
         if (this.targetCoins > this.currentCoins) this.updateCoins()
         if (this.targetScore > this.currentScore) this.updateScore()
-        }
+        
     }
     updateCoins() {
         this.currentCoins++
@@ -170,7 +165,6 @@ class UI {
         if (this.game.totalFrames < this.startFrame) return;
         this.drawHealthOverlay(ctx)
         this.sprite.draw(ctx);
-        
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
         ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
@@ -190,12 +184,12 @@ class UI {
         
     }
     drawHealthOverlay(ctx){
-        let healthImageIndex = Math.ceil(5-(this.health*5))
+        let healthImageIndex = Math.ceil(5-(this.game.health*5))
         if (healthImageIndex > 4) healthImageIndex = 4 
         this.healthOverlays[healthImageIndex].draw(ctx)
     }
     spawnCoin(posXAtBase,startingY,heightOffset){
-        Projectile.activeProjectiles.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.marginX,this.marginY, this))
+        this.game.activeObjects.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.marginX,this.marginY, this))
     }
     
     
@@ -209,7 +203,9 @@ class Game{
         this.lastTimeStamp = 0;
         this.frameTimeDeficit = 0;
         this.fps = 48;
+        this.health = 1
         this.framesSinceCrossbowman = 0;
+        this.treesDelay = 40;
         this.crossbowmanDelay = 100
         this.enemiesDue = 4;
         this.totalFrames = 0;
@@ -219,24 +215,22 @@ class Game{
         this.UI = new UI(this,bitmaps.ui)
         this.ctx.font = "45px Lugrasimo"
         this.health = 1;
-        this.enemies = [];
-        this.backgroundElements = [];
+        this.activeObjects = []
         this.input;
         this.bitmaps = bitmaps
-        this.altCanvas = document.createElement("canvas")
-        this.altCanvas.width = width
-        this.altCanvas.height = height
-        this.ctxAlt = this.altCanvas.getContext("2d")
+        this.shadowCanvas = document.createElement("canvas")
+        this.shadowCanvas.width = width
+        this.shadowCanvas.height = height
+        this.ctxShadow = this.shadowCanvas.getContext("2d")
         this.shadowImg = new Image()
         this.shadowImg.src = "./images/shadow_circle.png"
         this.initalizeBackground();
-
         this.frameCounter = 0
     }
     initalizeBackground(){
         for (let i = 0; i < 9; i++) {
             for (let i = 0; i < 40; i++) {
-                InanimateObjects.activeObjects.forEach((e)=> e.update())
+                this.activeObjects.forEach((e)=> e.update())
             }
             this.createDuelTrees()
         }
@@ -254,46 +248,42 @@ class Game{
             this.player.update(this.input)
             this.handleEnemies();
             this.handleBackground();
-            Projectile.activeProjectiles.forEach((e)=>e.update())
-            
-            Projectile.activeProjectiles = Projectile.activeProjectiles.filter((e)=>!e.markedForDel)
-            
-            InanimateObjects.activeObjects.forEach((e)=>e.update())
-            InanimateObjects.activeObjects = InanimateObjects.activeObjects.filter((e)=>!e.markedForDel)
-            if (Sprite.unloadedImages > 0) return;
+            this.activeObjects.forEach((e)=>e.update())
+            this.activeObjects = this.activeObjects.filter((e)=>!e.markedForDel)          
             this.draw(this.ctx);
     }
 }
     handleBackground(){
-        if (this.totalFrames % 40/this.speedModifier === 0)this.createDuelTrees();
-        this.backgroundElements = this.backgroundElements.filter(e=>!e.markedForDel)
-        this.backgroundElements.forEach((e)=>{
-            e.moveWithPerspective();
-            e.fadeAlpha(0.25)
-            if (e.percentTraveled > 0.9) e.markedForDel = true;
-        })
+        if (this.treesDelay <= 0) {
+            this.createDuelTrees();
+            this.treesDelay += 40/this.speedModifier
+        } else this.treesDelay -= 1
+
+        if (this.treesDelay === 20/this.speedModifier) {
+            this.activeObjects.unshift(new Bush((this.width/2+randomValue(875,1050)*randomSign())))
+        if (Math.abs(Bush.centerOffsetBias) > 1200) {
+                console.log(Bush.centerOffsetBias)
+                this.activeObjects[0].maxCenterOffset *= -1
+                Bush.centerOffsetBias = 0;
+        }
+    }
     }
     createDuelTrees(){
-        InanimateObjects.activeObjects.unshift(new Tree((this.width/2)+1200))
-        InanimateObjects.activeObjects.unshift(new Tree((this.width/2)-1200))
-        InanimateObjects.activeObjects[1].flipped = true;
+       this.activeObjects.unshift(new Tree((this.width/2)+1200))
+       this.activeObjects.unshift(new Tree((this.width/2)-1200))
+       this.activeObjects[1].flipped = true;
         
     }
     handleEnemies(){
-        let center = this.width/2
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
         else this.framesSinceCrossbowman ++;
-        this.enemies = this.enemies.filter( e => {
-            e.update();
-            return !e.markedForDel
-        })
     }
     spawnCrossbowWave() {
         let roadSide = randomSign();
         if (this.enemiesDue > 0) {
             const newEnemy = new Crossbowman(this, this.width/2 - 500*roadSide)
             if (roadSide === -1) newEnemy.image.flipped = true;
-            this.enemies.unshift(newEnemy)
+            this.activeObjects.unshift(newEnemy)
             this.framesSinceCrossbowman = 0;
             this.crossbowmanDelay = Math.random()*60+30
             this.enemiesDue -= 1
@@ -304,31 +294,20 @@ class Game{
     }
     draw(){
         this.ctx.clearRect(0, 0, this.width, this.height);
-        this.ctxAlt.clearRect(0,0,this.width,this.height)
+        this.ctxShadow.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
-        const objectsToDraw = InanimateObjects.activeObjects
-                .concat(Projectile.activeProjectiles)
-                .concat(this.enemies.map(e=>e.image))
-        objectsToDraw.sort((a,b)=> a.percentTraveled - b.percentTraveled)
-        this.drawShadows(objectsToDraw)
-        objectsToDraw.forEach(e=>e.draw(this.ctx))
-
+        this.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        this.overlayShadows()
+        this.activeObjects.forEach(e => e.draw(this.ctx))
         this.player.draw(this.ctx)
         this.UI.draw(this.ctx);
     }
-    drawShadows(...arrays){
-        arrays.forEach(e=>{
-            e.forEach(e=>{
-            const y = e.imageBaseY - e.dh/10
-            const width = e.dw*1.1
-            this.ctxAlt.globalAlpha = e.alpha
-            this.ctxAlt.drawImage(this.shadowImg, Math.floor((e.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(width*0.3+0.5))
-            })
-        })
+    overlayShadows(){
+        this.activeObjects.forEach(e => e.drawShadow(this.ctxShadow,this.shadowImg))
+        this.ctxShadow.clearRect(0, 0, this.width, GameImage.startY)
         this.ctx.globalAlpha = 0.3
-        this.ctxAlt.clearRect(0,0,this.width,GameImage.startY)
-        this.ctx.drawImage(this.altCanvas,0,0,this.width,this.height)
-        this.ctx.globalAlpha = 1
+        this.ctx.drawImage(this.shadowCanvas,0,0,this.width,this.height)
+        this.ctx.globalAlpha = 1        
     }
     drawStaticBackground(ctx){
         const gradient = ctx.createLinearGradient(0,0,0,200)
@@ -464,6 +443,11 @@ class GameImage {
         //ctx.drawImage(image, Math.floor(dx + centerOffset + 0.5), dy + heightOffset, Math.floor(dw+0.5), Math.floor(dh+0.5))
         if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.restore();
     }
+    drawShadow(ctx,shadowImg){
+        const y = this.imageBaseY - this.dh/10
+        const width = this.dw*1.1
+        ctx.drawImage(shadowImg, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(width*0.3+0.5))
+    }
     rotate(ctx){
         if (this.angle === 0) return; 
         ctx.translate(this.centerX,this.centerY)
@@ -509,8 +493,10 @@ class Tree extends InanimateObjects {
 }
 
 class Bush extends InanimateObjects {
+    static centerOffsetBias = 0
     constructor(posXAtBase){
-        super("./images/bush.png",243,142,posXAtBase,80)
+        super("./images/bush.png",243*2,142*2,posXAtBase,30)
+        Bush.centerOffsetBias += this.maxCenterOffset
     }
 }
 
@@ -551,6 +537,7 @@ class Projectile extends GameImage {
         this.velY -= this.gravity
         this.angle += this.rotationSpeed*Math.PI*2   
     }
+    drawShadow(){}
 }
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
@@ -591,7 +578,7 @@ class FiredArrow extends Projectile {
             this.player.state === this.player.states["blocking"]){
             const velocityDirection = -Math.sign(this.velX)
             const arrowDestinationX = GameImage.baseCenterX + velocityDirection*150
-            Projectile.activeProjectiles.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
+            this.game.activeObjects.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
             this.game.UI.addScore(2)
         } else this.player.receiveAttack(this)
         
@@ -690,6 +677,9 @@ class Enemy{
     draw(ctx){
         this.image.draw(ctx);
     }
+    drawShadow(ctx,shadowImg){
+        this.image.drawShadow(ctx,shadowImg)
+    }
     
 }
 
@@ -708,11 +698,11 @@ class Crossbowman extends Enemy {
     
     update(){
         this.image.moveWithPerspective()
+        if (this.image.percentTraveled > 1.1) this.markedForDel = true;
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
         } else this.fadeAlpha(0.25)
-        if (this.image.percentTraveled > 1.1) this.markedForDel = true;
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
     }
@@ -725,7 +715,7 @@ class Crossbowman extends Enemy {
         this.state = "fired"
         this.image.swapImage('./images/gaurd_nobolt.png')
         const {posXAtBase,imageBaseY,maxHeight} = this.image
-        Projectile.activeProjectiles.push(new FiredArrow(posXAtBase,imageBaseY,-maxHeight/2, this.game))
+        this.game.activeObjects.push(new FiredArrow(posXAtBase,imageBaseY,-maxHeight/2, this.game))
         
     }
     receiveAttack(){
@@ -735,9 +725,9 @@ class Crossbowman extends Enemy {
         this.sfx.death.play();
         this.sfx.death2.play();
         const {posXAtBase,imageBaseY,maxHeight, flipped} = this.image
-        Projectile.activeProjectiles.push(new DroppedCrossbow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
+        this.game.activeObjects.push(new DroppedCrossbow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
         for (let index = 0; index < 30; index++) {
-            Projectile.activeProjectiles.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
+            this.game.activeObjects.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
         }
         this.spawnCoins(5)
         this.game.UI.addScore(10)
@@ -781,7 +771,7 @@ class Player{
     }
     receiveAttack(source){
         let sfxChoice = Math.floor(randomValue(0,4))
-        this.game.UI.health -= 0.075
+        this.game.health -= 0.075
         this.sfx.hurt[sfxChoice].play();
         this.states.blocking.recoveryOffset = 120
         this.game.UI.combo = 1
@@ -915,7 +905,16 @@ class Attacking extends State {
     checkCollision(){
         if (this.sprite.frame < this.activeFrameRange[0] || 
             this.sprite.frame > this.activeFrameRange[1]) return;
-        this.game.enemies.forEach((e)=>{
+        const activeObj = this.game.activeObjects
+        for (let i = activeObj.length-1; i >= 0; i--) {
+            if (activeObj[i] instanceof Enemy){
+                let inRange = activeObj[i].image.percentTraveled > 0.63 
+                            && activeObj[i].image.percentTraveled < 0.9
+                            && activeObj[i].lane === this.player.lane
+                if (inRange) activeObj[i].receiveAttack();
+            } 
+        }
+        this.game.activeObjects.forEach((e)=>{
             let inRange = e.image.percentTraveled > 0.63 && e.image.percentTraveled < 0.9
             if (inRange && e.lane === this.player.lane) e.receiveAttack();
         })
