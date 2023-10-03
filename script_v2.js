@@ -135,9 +135,14 @@ class UI {
     }
     update(){
         if (this.game.totalFrames < this.startFrame) return;
+        if (this.health <= 0) {
+
+        }
+        else {
         this.sprite.incrementFrame(0.5);
         if (this.targetCoins > this.currentCoins) this.updateCoins()
         if (this.targetScore > this.currentScore) this.updateScore()
+        }
     }
     updateCoins() {
         this.currentCoins++
@@ -161,8 +166,9 @@ class UI {
     }
     draw(ctx){
         if (this.game.totalFrames < this.startFrame) return;
-        this.sprite.draw(ctx);
         this.drawHealthOverlay(ctx)
+        this.sprite.draw(ctx);
+        
         if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
         ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
@@ -179,10 +185,11 @@ class UI {
             this.scoreIncreaseDisplay = 0;
         }
         ctx.fillText(`ₓ${this.combo}`, this.game.width-this.marginX-75, this.centerY+15)
+        
     }
     drawHealthOverlay(ctx){
         let healthImageIndex = Math.ceil(5-(this.health*5))
-        console.log(healthImageIndex)
+        if (healthImageIndex > 4) healthImageIndex = 4 
         this.healthOverlays[healthImageIndex].draw(ctx)
     }
     spawnCoin(posXAtBase,startingY,heightOffset){
@@ -742,7 +749,7 @@ class Player{
     }
     receiveAttack(source){
         let sfxChoice = Math.floor(randomValue(0,4))
-        this.game.UI.health -= 0.1
+        this.game.UI.health -= 0.075
         this.sfx.hurt[sfxChoice].play();
         this.states.blocking.recoveryOffset = 120
         this.game.UI.combo = 1
