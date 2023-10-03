@@ -1,5 +1,7 @@
 /** @type {HTMLCanvasElement} */
 
+const loadNoSprites = true; //gets empty sprite files, game loads instantly but no visible player or banner  
+
 const canvas = document.getElementById("canvas1");
 const canvas2 = document.createElement("canvas")
 const pauseMenu = document.getElementById("pauseMenu")
@@ -193,7 +195,7 @@ class UI {
         this.healthOverlays[healthImageIndex].draw(ctx)
     }
     spawnCoin(posXAtBase,startingY,heightOffset){
-        Projectile.activeProjectiles.push(new Coin(posXAtBase,startingY,heightOffset,this.marginX,this.marginY, this))
+        Projectile.activeProjectiles.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.marginX,this.marginY, this))
     }
     
     
@@ -227,14 +229,14 @@ class Game{
         this.ctxAlt = this.altCanvas.getContext("2d")
         this.shadowImg = new Image()
         this.shadowImg.src = "./images/shadow_circle.png"
-        this.initalizeGame();
+        this.initalizeBackground();
 
         this.frameCounter = 0
     }
-    initalizeGame(){
+    initalizeBackground(){
         for (let i = 0; i < 9; i++) {
             for (let i = 0; i < 40; i++) {
-                this.backgroundElements.forEach((e)=> e.moveWithPerspective())
+                InanimateObjects.activeObjects.forEach((e)=> e.update())
             }
             this.createDuelTrees()
         }
@@ -253,7 +255,11 @@ class Game{
             this.handleEnemies();
             this.handleBackground();
             Projectile.activeProjectiles.forEach((e)=>e.update())
+            
             Projectile.activeProjectiles = Projectile.activeProjectiles.filter((e)=>!e.markedForDel)
+            
+            InanimateObjects.activeObjects.forEach((e)=>e.update())
+            InanimateObjects.activeObjects = InanimateObjects.activeObjects.filter((e)=>!e.markedForDel)
             if (Sprite.unloadedImages > 0) return;
             this.draw(this.ctx);
     }
@@ -268,12 +274,10 @@ class Game{
         })
     }
     createDuelTrees(){
-        let start = GameImage.startY
-        this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)+1200,start,80)) 
-        this.backgroundElements.unshift(new GameImage("./images/tree.png",643*2,921*1.8,(this.width/2)-1200,start,80))
-        this.backgroundElements[0].alpha = 0;
-        this.backgroundElements[0].flipped = true;
-        this.backgroundElements[1].alpha = 0;  
+        InanimateObjects.activeObjects.unshift(new Tree((this.width/2)+1200))
+        InanimateObjects.activeObjects.unshift(new Tree((this.width/2)-1200))
+        InanimateObjects.activeObjects[1].flipped = true;
+        
     }
     handleEnemies(){
         let center = this.width/2
@@ -285,7 +289,7 @@ class Game{
         })
     }
     spawnCrossbowWave() {
-        let roadSide = Math.sign(Math.random()-0.5)  // use randomSign() funciton 
+        let roadSide = randomSign();
         if (this.enemiesDue > 0) {
             const newEnemy = new Crossbowman(this, this.width/2 - 500*roadSide)
             if (roadSide === -1) newEnemy.image.flipped = true;
@@ -302,21 +306,26 @@ class Game{
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctxAlt.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
-        this.drawShadows(this.backgroundElements.concat(this.enemies.map(e=>e.image)))
-        const toDraw = this.backgroundElements.concat(this.enemies)
-        toDraw.forEach(e=>e.draw(this.ctx))
-        Projectile.activeProjectiles.forEach((e) => e.draw(this.ctx))
+        const objectsToDraw = InanimateObjects.activeObjects
+                .concat(Projectile.activeProjectiles)
+                .concat(this.enemies.map(e=>e.image))
+        objectsToDraw.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        this.drawShadows(objectsToDraw)
+        objectsToDraw.forEach(e=>e.draw(this.ctx))
+
         this.player.draw(this.ctx)
         this.UI.draw(this.ctx);
     }
-    drawShadows(array){
-        array.forEach(e=>{
+    drawShadows(...arrays){
+        arrays.forEach(e=>{
+            e.forEach(e=>{
             const y = e.imageBaseY - e.dh/10
             const width = e.dw*1.1
             this.ctxAlt.globalAlpha = e.alpha
             this.ctxAlt.drawImage(this.shadowImg, Math.floor((e.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(width*0.3+0.5))
+            })
         })
-        this.ctx.globalAlpha = 0.4
+        this.ctx.globalAlpha = 0.3
         this.ctxAlt.clearRect(0,0,this.width,GameImage.startY)
         this.ctx.drawImage(this.altCanvas,0,0,this.width,this.height)
         this.ctx.globalAlpha = 1
@@ -447,7 +456,7 @@ class GameImage {
         const {image, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled 
         const centerOffset = this.maxCenterOffset * this.percentTraveled
-        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save()
+        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save() //ugly way to not save/restore dozens of times a frame 
         if (this.flipped) this.flipHorizontal(ctx);  
         this.rotate(ctx)
         ctx.globalAlpha = this.alpha
@@ -478,8 +487,31 @@ class GameImage {
         newImage.onload = () => this.image = newImage
         newImage.src = imageSrc
     }
-    
-    
+}
+
+class InanimateObjects extends GameImage {
+    static activeObjects = []
+    constructor(fileSrc, maxWidth, maxHeight, posXAtBase, heightOffset){
+            super(fileSrc, maxWidth, maxHeight, posXAtBase, GameImage.startY, heightOffset)
+            this.alpha = 0;
+        }
+    update(){
+        this.moveWithPerspective()
+        this.fadeAlpha(0.25)
+        if (this.percentTraveled > 0.9) this.markedForDel = true;
+    }
+}
+
+class Tree extends InanimateObjects {
+    constructor(posXAtBase){
+        super("./images/tree.png",643*2,921*1.8,posXAtBase,80)
+    }
+}
+
+class Bush extends InanimateObjects {
+    constructor(posXAtBase){
+        super("./images/bush.png",243,142,posXAtBase,80)
+    }
 }
 
 class Sprite extends GameImage{
@@ -586,7 +618,7 @@ class DroppedCrossbow extends Projectile {
 class BloodSpurt extends Projectile {
     constructor(posXAtBase, startingY, heightOffset){
         super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
-            50, 50, posXAtBase, startingY, heightOffset, randomValue(3,15), 
+            40, 40, posXAtBase, startingY, heightOffset, randomValue(3,15), 
             randomValue(-3,6), 0, 0)
         this.gravity = 0.8;
         this.relativeSpeed = this.velTotal/3
@@ -595,7 +627,7 @@ class BloodSpurt extends Projectile {
         super.update()
         this.moveWithPerspective();
         this.framesActive += 1
-        if (this.framesActive = 20) this.markedForDel = true
+        if (this.framesActive === 40) this.markedForDel = true
         if (this.maxHeightOffset > 0){
             this.maxHeightOffset = 0;
             this.velX = 0;
@@ -664,7 +696,7 @@ class Enemy{
 class Crossbowman extends Enemy {
     constructor(game, posXAtBase, startingY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, posXAtBase, startingY)
-        this.alpha = 1;
+        this.image.alpha = 0;
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
@@ -679,7 +711,7 @@ class Crossbowman extends Enemy {
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
-        }
+        } else this.fadeAlpha(0.25)
         if (this.image.percentTraveled > 1.1) this.markedForDel = true;
         if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
         if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
@@ -703,9 +735,9 @@ class Crossbowman extends Enemy {
         this.sfx.death.play();
         this.sfx.death2.play();
         const {posXAtBase,imageBaseY,maxHeight, flipped} = this.image
-        Projectile.activeProjectiles.push(new DroppedCrossbow(posXAtBase, imageBaseY, -maxHeight/2, flipped))
-        for (let index = 0; index < 40; index++) {
-            Projectile.activeProjectiles.push(new BloodSpurt(posXAtBase, imageBaseY, -maxHeight/2))    
+        Projectile.activeProjectiles.push(new DroppedCrossbow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
+        for (let index = 0; index < 30; index++) {
+            Projectile.activeProjectiles.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
         }
         this.spawnCoins(5)
         this.game.UI.addScore(10)
@@ -918,7 +950,8 @@ async function getSprites(){
 async function getSprite(spriteJsonSource){
     const response = await fetch(spriteJsonSource)
     const json = await response.json()
-    const bitmaps = await getSpriteImages(json, `./images/${json.meta.image}`)
+    const spriteName = loadNoSprites ? './images/empty.png' : `./images/${json.meta.image}`
+    const bitmaps = await getSpriteImages(json, spriteName)
     return bitmaps
 }
 
@@ -945,6 +978,7 @@ async function getSpriteImages(spriteJson, spritesheetSrc){
 
 function startGame(){ 
     const game = new Game(ctx, canvas.width, canvas.height, bitmaps)
+    
     animate(0,game);  
 }
 function animate(timestamp, game){
