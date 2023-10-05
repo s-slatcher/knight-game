@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadNoSprites = false; //replaces sprites with blank pngs, game loads instantly 
+const loadNoSprites = true; //replaces sprites with blank pngs, game loads instantly 
 const loadMuted = false;
 const infiniteHealth = false;
 
@@ -225,14 +225,16 @@ class Game{
         this.frameCounter = 0
     }
     initalizeBackground(){
-        for (let i = 0; i < 11; i++) {
-            for (let i = 0; i < 40; i++) {
-                this.activeObjects.forEach((e)=> e.update())
-            }
-            this.createDuelTrees()
+        for (let i = 0; i < 450; i++) {
+            this.handleBackground();
+            this.activeObjects.forEach(e=>e.update())
+            // for (let i = 0; i < 40; i++) {
+            //     this.activeObjects.forEach((e)=> e.update())
+            // }
+            // this.createDuelTrees()
         }
         for (let i = 0; i < 5; i++) {
-            this.activeObjects.push(new SkyLayer(550-(i*5),i*3))
+            this.activeObjects.push(new SkyLayer(550-(i*10),i*5))
         }
         
     }
@@ -262,19 +264,20 @@ class Game{
         } else this.treesDelay -= 1
 
         if (this.treesDelay === 20/this.speedModifier) {
-            this.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
-        if (Math.abs(Bush.centerOffsetBias) > 1200) {
-                console.log(Bush.centerOffsetBias)
-                this.activeObjects[0].maxCenterOffset *= -1
-                Bush.centerOffsetBias = 0;
+            this.createBush();
         }
-    }
     }
     createDuelTrees(){
        this.activeObjects.unshift(new Tree((this.width/2)+1200))
        this.activeObjects.unshift(new Tree((this.width/2)-1200))
        this.activeObjects[1].flipped = true;
-        
+    }
+    createBush(){
+        this.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
+        if (Math.abs(Bush.centerOffsetBias) > 1200) {
+                this.activeObjects[0].maxCenterOffset *= -1
+                Bush.centerOffsetBias = 0;
+        }
     }
     handleEnemies(){
         if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
@@ -555,7 +558,7 @@ class Bush extends GroundedObjects {
 
 class SkyLayer extends GameImage{
     constructor(startOffset, endOffset){
-        super("./images/sky_layers/skylayer3.png",5000,5000,500,GameImage.bottomY-startOffset,0) //./images/skylayer3.png
+        super("./images/sky_layers/skylayer3.png",2500,2500,500,GameImage.bottomY-startOffset,0) //./images/skylayer3.png
         this.relativeSpeed = -20
         this.endOffset = endOffset
     }
@@ -920,7 +923,7 @@ class Blocking extends State {
     }
     draw(ctx){
         this.sprite.maxHeightOffset += this.bounceOffset
-        this.player.game.changePerspectiveHeight(725+(this.bounceOffset-10))
+        this.player.game.changePerspectiveHeight(725-(this.bounceOffset+20))
         this.sprite.draw(ctx)
         this.sprite.maxHeightOffset -= this.bounceOffset
     }
