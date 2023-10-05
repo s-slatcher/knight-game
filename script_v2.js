@@ -1,8 +1,8 @@
 /** @type {HTMLCanvasElement} */
 
-const loadNoSprites = true; //replaces sprites with blank pngs, game loads instantly 
+const loadNoSprites = false; //loads fast, no sprites visible
 const loadMuted = false;
-const infiniteHealth = false;
+const disableEnemyDamage = false;
 
 const canvas = document.getElementById("canvas1");
 const canvas2 = document.createElement("canvas")
@@ -92,7 +92,7 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
-class UI {
+class Stats {
     constructor(game,spriteBitmap){
         this.game = game;
         this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
@@ -174,7 +174,6 @@ class UI {
             this.scoreIncreaseDisplay = 0;
         }
         ctx.fillText(`ₓ${this.combo}`, this.game.width-this.marginX-75, this.centerY+15)
-        
     }
     drawHealthOverlay(ctx){
         let healthImageIndex = Math.ceil(5-(this.game.health*5))
@@ -200,20 +199,19 @@ class Game{
         this.frameTimeDeficit = 0;
         this.fps = 48;
         this.health = 1
-        this.framesSinceCrossbowman = 0;
+        this.framesSinceBowman = 0;
         this.treesDelay = 40;
-        this.crossbowmanDelay = 0
-        this.enemiesDue = 4;
+        this.bowmanDelay = 0
+        this.bowmanDue = 3;
         this.totalFrames = 0;
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
-        this.UI = new UI(this,bitmaps.ui)
+        this.stats = new Stats(this,bitmaps.ui)
         this.ctx.font = "45px Lugrasimo"
-        this.health = infiniteHealth ? 10000 : 1
+        this.health = 1
         this.activeObjects = []
         this.input;
-        this.bitmaps = bitmaps
         this.shadowCanvas = document.createElement("canvas")
         this.shadowCanvas.width = width
         this.shadowCanvas.height = height
@@ -222,22 +220,8 @@ class Game{
         this.shadowImg.src = "./images/shadow_circle_blurred_2.png"
         this.initalizeBackground();
         //this.perspectiveTestListeners();    only for testing
-        this.frameCounter = 0
     }
-    initalizeBackground(){
-        for (let i = 0; i < 450; i++) {
-            this.handleBackground();
-            this.activeObjects.forEach(e=>e.update())
-            // for (let i = 0; i < 40; i++) {
-            //     this.activeObjects.forEach((e)=> e.update())
-            // }
-            // this.createDuelTrees()
-        }
-        for (let i = 0; i < 5; i++) {
-            this.activeObjects.push(new SkyLayer(550-(i*10),i*5))
-        }
-        
-    }
+    
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
             document.getElementById("resume-btn").classList.remove("disabled")
@@ -247,16 +231,24 @@ class Game{
         if (framesDue !== 0) {
             this.totalFrames++;
             this.handleInput(keyRecord, touchRecord);
-            this.UI.update(this.health)
+            this.stats.update()
             this.player.update(this.input)
             this.handleEnemies();
             this.handleBackground();
             this.activeObjects.forEach((e)=>e.update())
             this.activeObjects = this.activeObjects.filter((e)=>!e.markedForDel)          
-            this.draw(this.ctx);
-            
+            this.draw(this.ctx);   
+        }
     }
-}
+    initalizeBackground(){
+        for (let i = 0; i < 450; i++) {
+            this.handleBackground();
+            this.activeObjects.forEach(e=>e.update())
+        }
+        for (let i = 0; i < 5; i++) {
+            this.activeObjects.push(new SkyLayer(550-(i*10),i*10))
+        } 
+    }
     handleBackground(){
         if (this.treesDelay <= 0) {
             this.createDuelTrees();
@@ -280,32 +272,32 @@ class Game{
         }
     }
     handleEnemies(){
-        if (this.framesSinceCrossbowman > this.crossbowmanDelay) this.spawnCrossbowWave();
-        else this.framesSinceCrossbowman ++;
+        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave();
+        else this.framesSinceBowman ++;
     }
-    spawnCrossbowWave() {
+    spawnBowWave() {
         let roadSide = randomSign();
-        if (this.enemiesDue > 0) {
-            const newEnemy = new Crossbowman(this, this.width/2 - 500*roadSide)
+        if (this.bowmanDue > 0) {
+            const newEnemy = new Bowman(this, this.width/2 - 500*roadSide)
             if (roadSide === -1) newEnemy.image.flipped = true;
             this.activeObjects.unshift(newEnemy)
-            this.framesSinceCrossbowman = 0;
-            this.crossbowmanDelay = Math.random()*60+30
-            this.enemiesDue -= 1
+            this.framesSinceBowman = 0;
+            this.bowmanDelay = Math.random()*20+40
+            this.bowmanDue -= 1
         } else {
-            this.crossbowmanDelay += 200
-            this.enemiesDue = 4
+            this.bowmanDelay = 200
+            this.bowmanDue = 3
         }   
     }
     draw(){
         this.ctx.clearRect(0, 0, this.width, this.height);
         this.ctxShadow.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
-        this.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        if (this.totalFrames % 3 === 0) this.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
         this.overlayShadows()
         this.activeObjects.forEach(e => e.draw(this.ctx))
         this.player.draw(this.ctx)
-        this.UI.draw(this.ctx);
+        this.stats.draw(this.ctx);
     }
     overlayShadows(){
         this.activeObjects.forEach(e => e.drawShadow(this.ctxShadow,this.shadowImg))
@@ -360,7 +352,6 @@ class Game{
             e.preventDefault()
             if (e.button === 0) this.setBaseStartPoint(GameImage.bottomY+5)
             if (e.button === 1) {
-                console.log("middle mouse")
                 if (GameImage.startPercentage < 0.15 || GameImage.startPercentage > 0.23) startPercentAdjust *= -1
                 this.setViewDistance(GameImage.startPercentage+startPercentAdjust)
             }
@@ -391,7 +382,6 @@ class Game{
         this.activeObjects.forEach((e)=> {
             if (e instanceof Enemy) e.image.maxCenterOffset *= ratio
             else if (!(e instanceof SkyLayer)) e.maxCenterOffset *= ratio
-            console.log(ratio)
         })
         GameImage.setPerspective(GameImage.bottomY,height,GameImage.baseWidth+baseAdjustment,GameImage.startPercentage,newGameSpeed)
         
@@ -653,13 +643,13 @@ class FiredArrow extends Projectile {
             const velocityDirection = -Math.sign(this.velX)
             const arrowDestinationX = GameImage.baseCenterX + velocityDirection*150
             this.game.activeObjects.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
-            this.game.UI.addScore(2)
+            this.game.stats.addScore(2)
         } else this.player.receiveAttack(this)
         
     }
 }
 
-class DroppedCrossbow extends Projectile {
+class DroppedBow extends Projectile {
     constructor(posXAtBase, startingY, heightOffset, flipped){
         super('./images/crossbow.png', 250*0.8, 141*0.8, posXAtBase, startingY, heightOffset, 10, 0)
         this.flipped = flipped
@@ -699,9 +689,9 @@ class BloodSpurt extends Projectile {
 
 class Coin extends Projectile{
     static lastSfxValue = 0 
-    constructor(x,y,heightOffset,targetX, targetY, UI){
+    constructor(x,y,heightOffset,targetX, targetY, stats){
         super(`./images/coin.png`,55*0.6,42*0.6,x+randomValue(-10,10),y,heightOffset+randomValue(-10,10),0,0,randomValue(0,2),0)
-        this.UI = UI
+        this.stats = stats
         this.targetX = targetX + randomValue(-80,80)
         this.targetY = targetY
         this.velY = (y - this.targetY)/ 100  
@@ -720,7 +710,7 @@ class Coin extends Projectile{
         if (this.alpha <= 0) {
             this.markedForDel = true;
             this.sfx.play(); 
-            this.UI.targetCoins += 1       
+            this.stats.targetCoins += 1       
         }    
     }
     setSfx(){
@@ -750,16 +740,13 @@ class Enemy{
         this.markedForDel = false;
         this.sfx = {}
     }
-    get lane(){
-        return this.image.lane
-    }
-    get percentTraveled(){
-        return this.image.percentTraveled
-    }
+    get lane(){ return this.image.lane}
+    get percentTraveled(){ return this.image.percentTraveled }
+    
     spawnCoins(amount){
         const {posXAtBase,imageBaseY,maxHeight} = this.image
         for (let i = 0; i < amount; i++) {
-           this.game.UI.spawnCoin(posXAtBase,imageBaseY,-maxHeight/2) 
+           this.game.stats.spawnCoin(posXAtBase,imageBaseY,-maxHeight/2) 
         } 
     }
     draw(ctx){
@@ -773,7 +760,7 @@ class Enemy{
     
 }
 
-class Crossbowman extends Enemy {
+class Bowman extends Enemy {
     constructor(game, posXAtBase){
         const spawningY = 0.15 * GameImage.height + GameImage.topY
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, posXAtBase, spawningY)
@@ -789,15 +776,15 @@ class Crossbowman extends Enemy {
     
     update(){
         this.image.moveWithPerspective()
-        if (this.image.percentTraveled > 1.1) this.markedForDel = true;
+        if (this.percentTraveled > 1.1) this.markedForDel = true;
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
         } else this.fadeAlpha(0.25)
-        if (this.image.percentTraveled > 0.35 && this.state === "unloaded") this.loadCrossbow()
-        if (this.image.percentTraveled > 0.4 && this.state === "loaded") this.attack();
+        if (this.percentTraveled > 0.30 && this.state === "unloaded") this.loadBow()
+        if (this.percentTraveled > 0.35 && this.state === "loaded") this.attack();
     }
-    loadCrossbow(){
+    loadBow(){
         this.state = "loaded"
         this.image.swapImage('./images/gaurd_loaded.png')   
         this.sfx.load.play();
@@ -816,12 +803,12 @@ class Crossbowman extends Enemy {
         this.sfx.death.play();
         this.sfx.death2.play();
         const {posXAtBase,imageBaseY,maxHeight, flipped} = this.image
-        this.game.activeObjects.push(new DroppedCrossbow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
+        this.game.activeObjects.push(new DroppedBow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
         for (let index = 0; index < 30; index++) {
             this.game.activeObjects.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
         }
         this.spawnCoins(5)
-        this.game.UI.addScore(10)
+        this.game.stats.addScore(10)
     }
     fadeAlpha(num){
         this.image.fadeAlpha(num)
@@ -861,11 +848,12 @@ class Player{
         this.state.enter();
     }
     receiveAttack(source){
+        if (disableEnemyDamage) return;
         let sfxChoice = Math.floor(randomValue(0,4))
         this.game.health -= 0.075
         this.sfx.hurt[sfxChoice].play();
-        this.states.blocking.recoveryOffset = 120
-        this.game.UI.combo = 1
+        this.states.blocking.recoveryOffset = 90
+        this.game.stats.combo = 1
         this.changeState("blocking")
     }
 }
@@ -893,7 +881,7 @@ class Blocking extends State {
         this.earlyFramesToSkip = 5
         this.inputDelayCounter = 0;
         this.angleCounter = 0;
-        this.bounceOffset = 0
+        this.bounceDamageIntensity = 15
         this.recoveryOffset = 0
         this.lastInput = 'middle'
     }
@@ -905,7 +893,8 @@ class Blocking extends State {
     }
     update(input){
         this.sprite.fadeAlpha(0.2)
-        this.addBounce()
+        this.angleCounter += 1/20
+        this.applyBounce()
         this.updateLane()
         if (input === 'attack' && this.recoveryOffset < 20){
             this.player.changeState("attacking")
@@ -922,10 +911,7 @@ class Blocking extends State {
         
     }
     draw(ctx){
-        this.sprite.maxHeightOffset += this.bounceOffset
-        this.player.game.changePerspectiveHeight(725-(this.bounceOffset+20))
         this.sprite.draw(ctx)
-        this.sprite.maxHeightOffset -= this.bounceOffset
     }
     makeFrameQueue(input){
         this.frameQueue = [];
@@ -943,17 +929,22 @@ class Blocking extends State {
             this.frameQueue = this.frameQueue.filter((e) => e < this.middleSkipRange[0] || e > this.middleSkipRange[1])
         }
     }
-    addBounce() {
-        this.angleCounter += 1/20
-        let mod = 15
-        let unmodBounceOffset = Math.sin(this.angleCounter)
+    applyBounce(){
+        this.adjustBounceRecoveryModifier()
+        this.sprite.maxHeightOffset = 0 + this.getBounceMod(20,this.angleCounter+0.25)
+        this.player.game.changePerspectiveHeight(710-(this.getBounceMod(18,this.angleCounter)))
+    }
+    getBounceMod(intensity, angleInput) {
+        let bounceOffset = Math.sin(angleInput) * intensity
+        if (bounceOffset > 0) bounceOffset *= -1
+        return (bounceOffset * this.bounceDamageIntensity * this.player.game.speedModifier) + this.recoveryOffset
+    }
+    adjustBounceRecoveryModifier(){
+        this.bounceDamageIntensity = 1
         if (this.recoveryOffset > 1) {
             this.recoveryOffset -=  2 * (this.recoveryOffset/20)
-            mod *= (1/this.recoveryOffset)
+            this.bounceDamageIntensity *= (1/this.recoveryOffset)
         } else this.recoveryOffset = 0
-        if (unmodBounceOffset > 0) mod *= -1
-        this.bounceOffset = unmodBounceOffset * mod * this.player.game.speedModifier + this.recoveryOffset
-        
     }
     updateLane(){
         if (this.inputDelayCounter > 0) return
@@ -1038,7 +1029,7 @@ async function getSprites(){
 async function getSprite(spriteJsonSource){
     const response = await fetch(spriteJsonSource)
     const json = await response.json()
-    const spriteName = loadNoSprites ? './images/empty.png' : `./images/${json.meta.image}`
+    const spriteName = `./images/${loadNoSprites ? "empty.png" : json.meta.image}`
     const bitmaps = await getSpriteImages(json, spriteName)
     return bitmaps
 }
