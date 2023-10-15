@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadBlankSprites = false;
+const loadBlankSprites = true;
 const loadMuted = false;
 const disableEnemyDamage = false;
 
@@ -14,8 +14,9 @@ const ctx = canvas.getContext('2d',{ alpha: false });
 const keyRecord = [];
 const touchRecord = {};
 const bitmaps = {}
-let spritesToLoad = 3;
+let spritesToLoad = 2;
 let spritesLoaded = 0;
+startButton.innerHTML = `Loading`
 
 
 canvas.width = 1000;
@@ -26,6 +27,7 @@ canvas.style.aspectRatio = 1/1
 
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
+const randomInt = (a,b) => Math.floor(randomValue(a,b+1))
 const twoPointDistance = (coords1, coords2) => {
     return Math.sqrt(Math.pow((coords2[0]-coords1[0]),2) + Math.pow((coords2[1]-coords1[1]),2))
 }
@@ -36,8 +38,6 @@ getSprites();
 
 const updateLoadScreen = function(){
     spritesLoaded += 1;
-    let loadPercent = Math.floor((spritesLoaded/spritesToLoad)*100)
-    startButton.innerHTML = `Loading ${loadPercent}%`
     if (spritesLoaded === spritesToLoad) {
         startButton.innerHTML = "Start Game"
         startButton.addEventListener('click',() => {   
@@ -93,14 +93,11 @@ document.addEventListener("touchend", e => {
 })
 
 class Stats {
-    constructor(game,spriteBitmap){
+    constructor(game){
         this.game = game;
-        this.sprite = new Sprite(spriteBitmap, 880, 260*0.6, -830)
         this.startFrame = 150
-        this.centerX = this.sprite.centerX
-        this.centerY = this.sprite.centerY
-        this.marginY = 100
-        this.marginX = 150
+        this.centerX = this.game.width/2
+        this.centerY = 100
         this.currentScore = 0
         this.targetScore = 0
         this.combo = 1
@@ -110,14 +107,18 @@ class Stats {
         this.healthOverlays = []
         this.coinImages = []
         this.coinImage = 0
-        this.createCoins() 
+        this.game.ctx.strokeStyle = 'black'
+        this.game.ctx.lineWidth = 5
+        this.font = "50px Lugrasimo"
+        this.game.ctx.font = this.font
+        this.createCoinImages() 
         this.createHealthOverlays()
     }    
-    createCoins(){
+    createCoinImages(){
         this.coinImages.push(new GameObj("",0,0))
         for (let i = 0; i < 6; i++) {
             this.coinImages
-                .push(new GameObj(`./images/coin_pile/${i+1}.png`,80,80,this.marginX+20,GameObj.bottomY,-885))
+                .push(new GameObj(`./images/coin_pile/${i+1}.png`,80,80,this.centerX-300,GameObj.bottomY,-1000+this.centerY+30))
         }
     }
     createHealthOverlays(){
@@ -128,8 +129,6 @@ class Stats {
         }
     }
     update(){
-        if (this.game.totalFrames < this.startFrame) return;
-        this.sprite.incrementFrame(0.5);
         if (this.targetCoins > this.currentCoins) this.updateCoins()
         if (this.targetScore > this.currentScore) this.updateScore()
         
@@ -144,7 +143,7 @@ class Stats {
         let difference = this.targetScore - this.currentScore
         let increment = (Math.sqrt(difference))/3
         if (increment > 200) increment = 200
-        if (increment < 0.2) increment = 0.2
+        if (increment < 0.5) increment = 0.2
         this.currentScore += increment
         
     }
@@ -155,26 +154,27 @@ class Stats {
         if (num > 5) this.combo += 1
     }
     draw(ctx){
-        if (this.game.totalFrames < this.startFrame) return;
-        
-        this.sprite.draw(ctx);
-        if (this.sprite.frame < this.sprite.frames.length-5) return;
         ctx.fillStyle = "black"
-        ctx.fillText(`${this.currentCoins}`, this.marginX + 75, this.centerY+15)
+        this.drawStrokedText(ctx,`${this.currentCoins}`, this.centerX-250, this.centerY+15)
         this.coinImages[this.coinImage].draw(ctx)
         let displayScore = Math.floor(this.currentScore)
         let remainder = this.targetScore - displayScore
         let scoreDimensions = ctx.measureText(`${displayScore}`)
-        ctx.fillText(`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
-        if(remainder > 1) {
+        this.drawStrokedText(ctx,`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
+        if(remainder > 0) {
             ctx.font = "30px Lugrasimo"
             ctx.fillText(`+${this.scoreIncreaseDisplay}`,this.centerX + (scoreDimensions.width/2) + 5, this.centerY+15)
-            ctx.font = "45px Lugrasimo"
+            ctx.font = this.font
         } else {
             this.scoreIncreaseDisplay = 0;
         }
-        ctx.fillText(`ₓ${this.combo}`, this.game.width-this.marginX-75, this.centerY+15)
+        this.drawStrokedText(ctx,`ₓ${this.combo}`, this.centerX+225, this.centerY+15)
         this.drawHealthOverlay(ctx)
+    }
+    drawStrokedText(ctx,text,x,y){
+        ctx.strokeText(text,x,y)
+        ctx.fillStyle = 'white'
+        ctx.fillText(text,x,y)
     }
     drawHealthOverlay(ctx){
         let healthImageIndex = Math.ceil(5-(this.game.health*5))
@@ -183,7 +183,7 @@ class Stats {
         this.healthOverlays[healthImageIndex].draw(ctx)
     }
     spawnCoin(posXAtBase,startingY,heightOffset){
-        this.game.activeObjects.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.marginX,this.marginY, this))
+        this.game.activeObjects.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.centerX-300,this.centerY, this))
     }
     
     
@@ -207,8 +207,7 @@ class Game{
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
-        this.stats = new Stats(this,bitmaps.ui)
-        this.ctx.font = "45px Lugrasimo"
+        this.stats = new Stats(this)
         this.health = 1
         this.activeObjects = []
         this.input;
@@ -216,8 +215,6 @@ class Game{
         this.shadowCanvas.width = width
         this.shadowCanvas.height = height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
-        this.shadowImg = new Image()
-        this.shadowImg.src = "./images/shadow_circle_blurred_2.png"
         this.initalizeBackground();
         // window.addEventListener('click',e=>{
         //     this.speedModifier += 0.1;
@@ -263,9 +260,10 @@ class Game{
         }
     }
     createDuelTrees(){
-       this.activeObjects.unshift(new Tree((this.width/2)+1200))
-       this.activeObjects.unshift(new Tree((this.width/2)-1200))
-       this.activeObjects[1].flipped = true;
+       this.activeObjects.unshift(new Tree((this.width/2)+randomInt(1030,1070)))
+       this.activeObjects.unshift(new Tree((this.width/2)-randomInt(1030,1070)))
+       this.activeObjects[1].flipped = randomInt(0,1) === 1
+       this.activeObjects[0].flipped = randomInt(0,1) === 1
     }
     createBush(){
         this.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
@@ -304,7 +302,7 @@ class Game{
         this.stats.draw(this.ctx);
     }
     overlayShadows(){
-        this.activeObjects.forEach(e => e.drawShadow(this.ctxShadow,this.shadowImg))
+        this.activeObjects.forEach(e => e.drawShadow(this.ctxShadow))
         this.ctxShadow.clearRect(0, 0, this.width, GameObj.startY)
         this.ctx.globalAlpha = 0.5
         this.ctx.drawImage(this.shadowCanvas,0,0,this.width,this.height)
@@ -472,12 +470,6 @@ class GameObj {
         //ctx.drawImage(image, Math.floor(dx + centerOffset + 0.5), dy + heightOffset, Math.floor(dw+0.5), Math.floor(dh+0.5))
         if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.restore();
     }
-    drawShadow(ctx,shadowImg){
-        const width = this.dw*2
-        const height = width*0.3
-        const y = this.imageBaseY - (height/1.8)
-        ctx.drawImage(shadowImg, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
-    }
     rotate(ctx){
         if (this.angle === 0) return; 
         ctx.translate(this.centerX,this.centerY)
@@ -509,40 +501,53 @@ class GroundedObjects extends GameObj {
     constructor(fileSrc, maxWidth, maxHeight, posXAtBase, heightOffset){
             const spawningY = 0.15 * GameObj.height + GameObj.topY
             super(fileSrc, maxWidth, maxHeight, posXAtBase, spawningY, heightOffset)
-            this.alpha = 0;
         }
     update(){
         this.moveWithPerspective()
-        this.fadeAlpha(0.25)
-        if (this.percentTraveled > 0.9) this.markedForDel = true;
+        if (this.percentTraveled > 1.25) this.markedForDel = true;
     }
     draw(ctx){
         if (this.imageBaseY < GameObj.startY) return;
+        if (this.alpha === 0) return;
         super.draw(ctx)
-    }
-    drawShadow(ctx,shadowImg){
-        if (this.imageBaseY < GameObj.startY) return;
-        super.drawShadow(ctx,shadowImg)
     }
 }
 
 class Tree extends GroundedObjects {
     constructor(posXAtBase){
-        let scaler = randomValue(1,1.05)
-        super("./images/tree.png",643*2*scaler,921*1.8*scaler,posXAtBase,80)
+        let scaler = randomValue(0.9,1.1)
+        const treePic = randomInt(1,6) === 2 ? 2 : 1   //1 in 4 chance for first tree in pic folder
+        super(`./images/trees/tree_v3_${treePic}.png`,1060*2,1090*2*scaler,posXAtBase,40)
+        this.shadow = new Image()
+        this.shadow.src = `./images/tree_shadows_v2/${Math.floor(randomValue(1,7))}.png`
+        this.shadowWidthMultiplier = randomValue(0.85,1)
     }
     update(){
-        this.moveWithPerspective()
-        this.fadeAlpha(0.25)
-        if (this.percentTraveled > 1.1) this.markedForDel = true;
+        if(this.percentTraveled > 0.7) this.fadeAlpha(-0.2)
+        super.update()
+    }
+    drawShadow(ctx){
+        const width = this.dw*this.shadowWidthMultiplier
+        const height = width*0.3
+        const y = this.imageBaseY - (height/1.8)
+        ctx.drawImage(this.shadow, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
     }
 }
 
 class Bush extends GroundedObjects {
     static centerOffsetBias = 0
     constructor(posXAtBase){
-        super("./images/bush.png",243*2,142*2,posXAtBase,30)
+        super("./images/bush.png",243*2,142*2,posXAtBase,0)
         Bush.centerOffsetBias += this.maxCenterOffset
+        this.shadow = new Image()
+        this.shadow.src = "./images/shadow_small.png"
+    }
+    drawShadow(ctx){
+        return
+        const width = this.dw*2
+        const height = width*0.3
+        const y = this.imageBaseY - (height/1.8)
+        ctx.drawImage(this.shadow, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
     }
 }
 
@@ -738,8 +743,9 @@ class Enemy extends GameObj{   //note to self: make Enemy a subclass of GameObj
         //this.image = new GameObj(baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY)
         this.game = game
         this.sfx = {}
+        this.shadow = new Image()
+        this.shadow.src = "./images/shadow_small.png"
     }
-
     spawnCoins(amount){
         const {posXAtBase,imageBaseY,maxHeight} = this
         for (let i = 0; i < amount; i++) {
@@ -750,11 +756,13 @@ class Enemy extends GameObj{   //note to self: make Enemy a subclass of GameObj
         if (this.imageBaseY < GameObj.startY) return;
         super.draw(ctx);
     }
-    drawShadow(ctx,shadowImg){
+    drawShadow(ctx){
         if (this.imageBaseY < GameObj.startY) return;
-        super.drawShadow(ctx,shadowImg)
+        const width = this.dw*1.5
+        const height = width*0.3
+        const y = this.imageBaseY - (height/1.8)
+        ctx.drawImage(this.shadow, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
     }
-    
 }
 
 class Bowman extends Enemy {
@@ -770,12 +778,12 @@ class Bowman extends Enemy {
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
         this.deathCounter = 0;
-        console.log(this.bowLoadDistance)
+        
     }
     
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.1) this.markedForDel = true;
+        if (this.percentTraveled > 1.2) this.markedForDel = true;
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
@@ -1018,8 +1026,6 @@ class Attacking extends State {
 
 async function getSprites(){
     await getSprite("./sword-attack-v2-compressed.json").then((resp) => bitmaps.attack = resp)
-    updateLoadScreen()
-    await getSprite("./parchment.json").then((resp) => bitmaps.ui = resp)
     updateLoadScreen()
     await getSprite("./sword48.json").then((resp) => bitmaps.block = resp)
     updateLoadScreen()
