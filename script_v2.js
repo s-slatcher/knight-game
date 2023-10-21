@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadBlankSprites = true;
+const loadBlankSprites = false;
 const loadMuted = false;
 const disableEnemyDamage = false;
 
