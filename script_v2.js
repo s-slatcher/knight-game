@@ -504,7 +504,7 @@ class GroundedObjects extends GameObj {
         }
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.25) this.markedForDel = true;
+        if (this.percentTraveled > 1.15) this.markedForDel = true;
     }
     draw(ctx){
         if (this.imageBaseY < GameObj.startY) return;
@@ -527,6 +527,7 @@ class Tree extends GroundedObjects {
         super.update()
     }
     drawShadow(ctx){
+        if (this.imageBaseY < GameObj.startY) return;
         const width = this.dw*this.shadowWidthMultiplier
         const height = width*0.3
         const y = this.imageBaseY - (height/1.8)
@@ -537,24 +538,21 @@ class Tree extends GroundedObjects {
 class Bush extends GroundedObjects {
     static centerOffsetBias = 0
     constructor(posXAtBase){
-        super("./images/bush.png",243*2,142*2,posXAtBase,0)
+        const scaler = randomValue(1,1.15)
+        super(`./images/bushes/${randomInt(1,2)}.png`,240*2*scaler,150*2*scaler,posXAtBase,0)
         Bush.centerOffsetBias += this.maxCenterOffset
         this.shadow = new Image()
         this.shadow.src = "./images/shadow_small.png"
     }
-    drawShadow(ctx){
-        return
-        const width = this.dw*2
-        const height = width*0.3
-        const y = this.imageBaseY - (height/1.8)
-        ctx.drawImage(this.shadow, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
-    }
+    drawShadow(ctx){}
 }
 
 class SkyLayer extends GameObj{
     constructor(startOffset, endOffset){
         super("./images/sky_layers/skylayer3.png",2500,2500,500,GameObj.bottomY-startOffset,0) //./images/skylayer3.png
         this.endOffset = endOffset
+        
+        
     }
     get endPoint(){return GameObj.startY + this.endOffset}
     
@@ -757,6 +755,7 @@ class Enemy extends GameObj{   //note to self: make Enemy a subclass of GameObj
         super.draw(ctx);
     }
     drawShadow(ctx){
+        return;
         if (this.imageBaseY < GameObj.startY) return;
         const width = this.dw*1.5
         const height = width*0.3
@@ -1069,9 +1068,9 @@ function startGame(){
 function animate(timestamp, game){
     game.update(timestamp, keyRecord, touchRecord)
     requestAnimationFrame((timestamp)=>{
-        
         animate(timestamp, game)
     })
 }
 
+let oldTimestamp = 0;
 
