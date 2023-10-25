@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadBlankSprites = false;
+const loadBlankSprites = true;
 const loadMuted = false;
 const disableEnemyDamage = false;
 
@@ -216,12 +216,12 @@ class Game{
         this.shadowCanvas.height = height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
         this.initalizeBackground();
-        // window.addEventListener('click',e=>{
-        //     this.speedModifier += 0.1;
-        //     GameObj.scrollSpeed = 8*this.speedModifier;
-        //     console.log(this.speedModifier,GameObj.scrollSpeed)
-        //     this.setViewDistance(GameObj.startPercentage - (1/120))
-        // })
+        window.addEventListener('click',e=>{
+            this.speedModifier += 0.1;
+            GameObj.scrollSpeed = 8*this.speedModifier;
+            console.log(this.speedModifier,GameObj.scrollSpeed)
+            this.setViewDistance(GameObj.startPercentage - (1/120))
+        })
         //this.perspectiveTestListeners(); 
     }
     update(timestamp, keyRecord, touchRecord){
@@ -234,11 +234,11 @@ class Game{
             this.totalFrames++;
             this.handleInput(keyRecord, touchRecord);
             this.stats.update()
-            this.player.update(this.input)
             this.handleEnemies();
             this.handleBackground();
             this.activeObjects.forEach((e)=>e.update())
-            this.activeObjects = this.activeObjects.filter((e)=>!e.markedForDel)          
+            this.player.update(this.input)
+            this.activeObjects = this.activeObjects.filter((e)=>!e.markedForDel)
             this.draw(this.ctx);   
         }
     }
@@ -276,20 +276,27 @@ class Game{
         if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave();
         else this.framesSinceBowman ++;
     }
-    spawnBowWave() {   //should change to spawn all bowman at once, at staggered distances, makes delay handling more straightforward 
-        let roadSide = randomSign();
-        if (this.bowmanDue > 0) {
-            const newEnemy = new Bowman(this, this.width/2 - 500*roadSide)
-            if (roadSide === -1) newEnemy.flipped = true;
-            this.activeObjects.unshift(newEnemy)
-            this.framesSinceBowman = 0;
-            this.bowmanDelay = Math.random()*20+40
-            this.bowmanDue -= 1
-        } else {
-            this.bowmanDelay = 200
-            this.bowmanDue = 3
+    spawnBowWave(){
+        const waveSize = 3 
+        const wave = []
+        let centerOffset = 500 * randomSign()
+        let startingY = 0.15 * GameObj.height + GameObj.topY
+        wave.push(new Turkey(this, this.width/2 - centerOffset, startingY))
+        for (let i = 1; i < waveSize; i++) {
+            let newCenterOffset = 500 * randomSign();
+            let buffer = randomInt(300,400)
+            let flipped = false
+            if (newCenterOffset !== centerOffset) buffer += 100
+            if (Math.sign(newCenterOffset) === -1) flipped = true
+            centerOffset = newCenterOffset
+            let adjustedBuffer = buffer * Math.pow(wave[i-1].percentTraveled,2) 
+            startingY -= adjustedBuffer
+            wave.push(new Bowman(this, this.width/2 - centerOffset, startingY))
+            wave[i].flipped = flipped
         }
-        this.bowmanDelay /= this.speedModifier 
+        this.activeObjects.push(...wave)
+        this.framesSinceBowman = 0
+        this.bowmanDelay = 350/this.speedModifier
     }
     draw(){
         this.ctx.clearRect(0, 0, this.width, this.height);
@@ -449,9 +456,10 @@ class GameObj {
             if (this.maxCenterOffset > 50) return "right"
             return "middle"
         }
+    
     moveWithPerspective(){
         const speed = (GameObj.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
-        let distanceFromBase = (1-this.percentTraveled)*GameObj.height - speed
+        const distanceFromBase = (1-this.percentTraveled)*GameObj.height - speed
         this.dw = (this.percentTraveled * this.maxWidth)
         this.dh = (this.percentTraveled * this.maxHeight)
         this.dy = (GameObj.bottomY - distanceFromBase) - this.dh
@@ -462,7 +470,7 @@ class GameObj {
         const {image, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled 
         const centerOffset = this.maxCenterOffset * this.percentTraveled
-        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save() //ugly way to not save/restore dozens of times a frame 
+        if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save() //make better fix for not save/restoring more than needed
         if (this.flipped) this.flipHorizontal(ctx);  
         this.rotate(ctx)
         ctx.globalAlpha = this.alpha
@@ -668,11 +676,15 @@ class DroppedBow extends Projectile {
     }
 }
 
-class BloodSpurt extends Projectile {
+
+
+class Spurt extends Projectile {
     constructor(posXAtBase, startingY, heightOffset){
-        super (`./images/blood/${Math.floor(Math.random()*2+1)}.png`,
-            40, 40, posXAtBase, startingY, heightOffset, randomValue(3,15), 
-            randomValue(-3,6), 0, 0)
+        super (undefined,
+            40, 40, posXAtBase+randomInt(-25,25), startingY, 
+            heightOffset+randomInt(-25,25), 
+            randomValue(3,15), 
+            randomValue(-4,4), 0, 0)
         this.gravity = 0.8;
         this.relativeSpeed = this.velTotal/3
     }
@@ -686,6 +698,20 @@ class BloodSpurt extends Projectile {
             this.velX = 0;
             this.relativeSpeed = 0
         }
+    }
+}
+
+class BloodSpurt extends Spurt {
+    constructor(posXAtBase, startingY, heightOffset){
+        super (posXAtBase, startingY, heightOffset)
+        this.image.src = `./images/blood/${randomInt(1,2)}.png`
+    }
+}
+
+class TurkeyMush extends Spurt {
+    constructor(posXAtBase, startingY, heightOffset){
+        super (posXAtBase, startingY, heightOffset)
+        this.image.src = `./images/turkey_bits/${randomInt(1,2)}.png`
     }
 }
 
@@ -735,10 +761,9 @@ class SoundEffect {
     }
 }
 
-class Enemy extends GameObj{   //note to self: make Enemy a subclass of GameObj
+class Enemy extends GameObj { 
     constructor(game, baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY){
         super(baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY)
-        //this.image = new GameObj(baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY)
         this.game = game
         this.sfx = {}
         this.shadow = new Image()
@@ -765,10 +790,9 @@ class Enemy extends GameObj{   //note to self: make Enemy a subclass of GameObj
 }
 
 class Bowman extends Enemy {
-    constructor(game, posXAtBase){
-        const spawningY = 0.15 * GameObj.height + GameObj.topY
+    constructor(game, posXAtBase, spawningY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, posXAtBase, spawningY)
-        this.alpha = 1;
+        this.alpha = 0;
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
@@ -786,7 +810,9 @@ class Bowman extends Enemy {
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
-        } 
+        } else {
+            this.fadeAlpha(0.25)
+        }
         if (this.percentTraveled > this.bowLoadDistance && this.state === "unloaded") this.loadBow()
         if (this.state === "loaded" && this.game.totalFrames > this.attackingFrame) this.attack();
     }
@@ -821,7 +847,23 @@ class Bowman extends Enemy {
 }
 
 class Turkey extends Enemy {
-    constructor(){}
+    constructor(game, posXAtBase, spawningY){
+        super(game, './images/turkey.png', 384*0.9, 206*0.9, posXAtBase, spawningY)
+        this.sfx.death = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
+    }
+    update(){
+        this.moveWithPerspective()
+        if (this.percentTraveled > 1.2) this.markedForDel = true;
+    }
+    receiveAttack(){
+        this.markedForDel = true;
+        this.game.health += 0.5
+        this.sfx.death.play()
+        const {posXAtBase,imageBaseY,maxHeight} = this
+        for (let i = 0; i < 50; i++) {
+           this.game.activeObjects.push(new TurkeyMush(posXAtBase, imageBaseY+10, -maxHeight/2)) 
+        }
+    }
 }
 class Pikeman extends Enemy {
     constructor(posX){
@@ -866,6 +908,7 @@ class Player{
         this.damageRecoveryEffect = 90
         this.game.stats.combo = 1
         this.changeState("blocking")
+        console.log(this.game.health)
     }
     applyBounce(){
         let damageBounceMod = 1;
@@ -999,11 +1042,7 @@ class Attacking extends State {
                 if (inRange) activeObj[i].receiveAttack();
             } 
         }
-        this.game.activeObjects.forEach((e)=>{
-            let inRange = e.percentTraveled > 0.63 && e.percentTraveled < 0.9
-                        && e.lane === this.player.lane && e instanceof Enemy
-            if (inRange) e.receiveAttack();
-        })
+        
     }
     angleAttack(){
         const sprite = this.sprite
@@ -1072,5 +1111,4 @@ function animate(timestamp, game){
     })
 }
 
-let oldTimestamp = 0;
 
