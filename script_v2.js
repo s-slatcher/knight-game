@@ -1,6 +1,6 @@
 /** @type {HTMLCanvasElement} */
 
-const loadBlankSprites = true;
+const loadBlankSprites = false;
 const loadMuted = false;
 const disableEnemyDamage = false;
 
@@ -28,6 +28,7 @@ canvas.style.aspectRatio = 1/1
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
 const randomInt = (a,b) => Math.floor(randomValue(a,b+1))
+const round = (num,degree) => Math.floor(num*(Math.pow(10,degree))) / Math.pow(10,degree)
 const twoPointDistance = (coords1, coords2) => {
     return Math.sqrt(Math.pow((coords2[0]-coords1[0]),2) + Math.pow((coords2[1]-coords1[1]),2))
 }
@@ -131,7 +132,7 @@ class Stats {
     update(){
         if (this.targetCoins > this.currentCoins) this.updateCoins()
         if (this.targetScore > this.currentScore) this.updateScore()
-        
+        this.updateSpeedModifier()
     }
     updateCoins() {
         this.currentCoins++
@@ -145,7 +146,10 @@ class Stats {
         if (increment > 200) increment = 200
         if (increment < 0.5) increment = 0.2
         this.currentScore += increment
-        
+    }
+    updateSpeedModifier(){
+        let newSpeed = round((1 + (Math.sqrt((this.combo-1)/40))),2)
+        if (newSpeed != this.game.speedModifier) this.game.updateGameSpeed(newSpeed)
     }
     addScore(num){
         let score = num * this.combo
@@ -204,6 +208,7 @@ class Game{
         this.bowmanDelay = 0
         this.bowmanDue = 3;
         this.totalFrames = 0;
+        this.gameProgress = 0
         this.speedModifier = 1;
         this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
@@ -216,12 +221,12 @@ class Game{
         this.shadowCanvas.height = height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
         this.initalizeBackground();
-        window.addEventListener('click',e=>{
-            this.speedModifier += 0.1;
-            GameObj.scrollSpeed = 8*this.speedModifier;
-            console.log(this.speedModifier,GameObj.scrollSpeed)
-            this.setViewDistance(GameObj.startPercentage - (1/120))
-        })
+        // window.addEventListener('click',e=>{
+        //     this.speedModifier += 0.1;
+        //     GameObj.scrollSpeed = 8*this.speedModifier;
+        //     console.log(this.speedModifier,GameObj.scrollSpeed)
+        //     this.setViewDistance(GameObj.startPercentage - (1/120))
+        // })
         //this.perspectiveTestListeners(); 
     }
     update(timestamp, keyRecord, touchRecord){
@@ -232,6 +237,7 @@ class Game{
         const framesDue = this.getFramesDue(timestamp)
         if (framesDue !== 0) {
             this.totalFrames++;
+            this.gameProgess += 1*this.speedModifier
             this.handleInput(keyRecord, touchRecord);
             this.stats.update()
             this.handleEnemies();
@@ -242,6 +248,13 @@ class Game{
             this.draw(this.ctx);   
         }
     }
+    updateGameSpeed(num){
+        this.speedModifier = num
+        console.log(this.speedModifier)
+        GameObj.scrollSpeed = 8*this.speedModifier;
+        this.setViewDistance(0.22 - ((1/12)*(num-1)))
+    }
+
     initalizeBackground(){
         for (let i = 0; i < 450; i++) {
             this.handleBackground();
@@ -273,30 +286,17 @@ class Game{
         }
     }
     handleEnemies(){
-        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave();
-        else this.framesSinceBowman ++;
-    }
-    spawnBowWave(){
-        const waveSize = 3 
-        const wave = []
-        let centerOffset = 500 * randomSign()
         let startingY = 0.15 * GameObj.height + GameObj.topY
-        wave.push(new Turkey(this, this.width/2 - centerOffset, startingY))
-        for (let i = 1; i < waveSize; i++) {
-            let newCenterOffset = 500 * randomSign();
-            let buffer = randomInt(300,400)
-            let flipped = false
-            if (newCenterOffset !== centerOffset) buffer += 100
-            if (Math.sign(newCenterOffset) === -1) flipped = true
-            centerOffset = newCenterOffset
-            let adjustedBuffer = buffer * Math.pow(wave[i-1].percentTraveled,2) 
-            startingY -= adjustedBuffer
-            wave.push(new Bowman(this, this.width/2 - centerOffset, startingY))
-            wave[i].flipped = flipped
+        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingY);
+        else this.framesSinceBowman ++;
+        if (this.health < 0.5) {
+            if(Turkey.turkeySpawnable()) this.activeObjects.push(new Turkey(this,this.width/2,startingY))
         }
-        this.activeObjects.push(...wave)
+    }
+    spawnBowWave(startingY){
+        this.activeObjects.push(...Bowman.spawnWave(this,startingY,randomInt(3,4)))
         this.framesSinceBowman = 0
-        this.bowmanDelay = 350/this.speedModifier
+        this.bowmanDelay = 400/this.speedModifier
     }
     draw(){
         this.ctx.clearRect(0, 0, this.width, this.height);
@@ -376,7 +376,6 @@ class Game{
     setBaseStartPoint(y=1000){
         const difference = GameObj.bottomY - y
         GameObj.setPerspective(y,GameObj.height,GameObj.baseWidth,GameObj.startPercentage,GameObj.scrollSpeed)
-        //this.activeObjects
     }
     setViewDistance(startPercentage){
         GameObj.startPercentage = startPercentage
@@ -423,7 +422,6 @@ class GameObj {
         ctx.fillStyle = "#cfbd86"
         ctx.fill();
     }
-    
     constructor(fileSrc, maxWidth, maxHeight, 
         posXAtBase=GameObj.baseCenterX, startingY=GameObj.startY, heightOffset = 0){
         this.image = new Image()
@@ -761,13 +759,15 @@ class SoundEffect {
     }
 }
 
-class Enemy extends GameObj { 
+class Enemy extends GameObj {
+    static enemies = []
     constructor(game, baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY){
         super(baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY)
         this.game = game
         this.sfx = {}
         this.shadow = new Image()
         this.shadow.src = "./images/shadow_small.png"
+        Enemy.enemies.push(this)
     }
     spawnCoins(amount){
         const {posXAtBase,imageBaseY,maxHeight} = this
@@ -780,28 +780,40 @@ class Enemy extends GameObj {
         super.draw(ctx);
     }
     drawShadow(ctx){
-        return;
         if (this.imageBaseY < GameObj.startY) return;
-        const width = this.dw*1.5
+        const width = this.dw*1.1
         const height = width*0.3
-        const y = this.imageBaseY - (height/1.8)
+        const y = this.imageBaseY - (height/1.5)
         ctx.drawImage(this.shadow, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
     }
 }
 
 class Bowman extends Enemy {
+    static spawnWave(game, spawningY, waveSize=3){
+        let posXAtBase = 500 * randomSign() + game.width/2
+        const wave = [new Bowman(game,posXAtBase,spawningY)]
+        for (let i = 1; i < waveSize; i++) {
+            posXAtBase = 500 * randomSign() + game.width/2
+            let buffer = randomInt(300,400)
+            if (posXAtBase !== wave[i-1].posXAtBase) buffer += 150
+            let bufferedStartingY = wave[i-1].imageBaseY - (buffer * Math.pow(wave[i-1].percentTraveled,2))
+            wave.push(new Bowman(game,posXAtBase,bufferedStartingY))
+        }
+        Enemy.enemies.push(...wave)
+        return wave;
+    }
     constructor(game, posXAtBase, spawningY){
         super(game, './images/gaurd_nobolt.png', 321*0.8, 604*0.8, posXAtBase, spawningY)
         this.alpha = 0;
+        this.flipped = this.lane === "right" ? true : false
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
-        this.bowLoadDistance = 0.27   //might need to store data protecting the player from arrows fired too close together
+        this.bowLoadDistance = 0.27   
         this.sfx.load = new SoundEffect (`./sounds/crossbow_loading/1.mp3`,0.1)
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
         this.deathCounter = 0;
-        
     }
     
     update(){
@@ -843,17 +855,30 @@ class Bowman extends Enemy {
         this.spawnCoins(5)
         this.game.stats.addScore(10)
     }
+    drawShadow(ctx){
+        return;
+    }
     
 }
 
 class Turkey extends Enemy {
+    static bufferFrames = 0;
+    static turkeySpawnable(){
+        if (Turkey.bufferFrames < 1) return true;
+        Turkey.bufferFrames -= 1
+        return false;
+    }
     constructor(game, posXAtBase, spawningY){
         super(game, './images/turkey.png', 384*0.9, 206*0.9, posXAtBase, spawningY)
         this.sfx.death = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
+        Turkey.bufferFrames += randomInt(1000,1800) / this.game.speedModifier
     }
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.2) this.markedForDel = true;
+        if (this.percentTraveled > 1.2) {
+            this.markedForDel = true;
+
+        }
     }
     receiveAttack(){
         this.markedForDel = true;
@@ -903,12 +928,11 @@ class Player{
     receiveAttack(source){
         if (disableEnemyDamage) return;
         let sfxChoice = Math.floor(randomValue(0,4))
-        this.game.health -= 0.075
+        this.game.health -= 0.4
         this.sfx.hurt[sfxChoice].play();
         this.damageRecoveryEffect = 90
         this.game.stats.combo = 1
         this.changeState("blocking")
-        console.log(this.game.health)
     }
     applyBounce(){
         let damageBounceMod = 1;
@@ -1036,8 +1060,8 @@ class Attacking extends State {
         const activeObj = this.game.activeObjects
         for (let i = activeObj.length-1; i >= 0; i--) {
             if (activeObj[i] instanceof Enemy){
-                let inRange = activeObj[i].percentTraveled > 0.63 
-                            && activeObj[i].percentTraveled < 0.9
+                let inRange = activeObj[i].percentTraveled > 0.63
+                            && activeObj[i].percentTraveled < (activeObj[i].lane === "middle" ? 1.1 : 0.9)  
                             && activeObj[i].lane === this.player.lane
                 if (inRange) activeObj[i].receiveAttack();
             } 
