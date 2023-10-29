@@ -1,7 +1,7 @@
 /** @type {HTMLCanvasElement} */
 
 //normal settings for all = false
-const loadBlankSprites = true;
+const loadBlankSprites = false;
 const loadMuted = false;
 const disableEnemyDamage = false;
 const showObjectsAtAnyDistance = false; //laggy
@@ -94,6 +94,37 @@ document.addEventListener("touchend", e => {
     let id = [...e.changedTouches][0].identifier
     delete touchRecord[`touch${id}`]
 })
+
+class InputHandler {
+    constructor(game){
+        this.game = game
+    }
+    readInput(keyRecord, touchRecord){
+        if (Object.keys(touchRecord).length === 0) return this.readKeyboardInput(keyRecord)
+        else return this.readTouchInput(touchRecord)
+    }
+    readKeyboardInput(keyRecord){
+        let input = 'middle'
+        if (keyRecord.includes('a')) input = 'left'
+        if (keyRecord.includes('d')) input = 'right'
+        if (keyRecord.includes('a') && keyRecord.includes('d')) input = 'middle'
+        if (keyRecord.includes(' ')) input = 'attack'
+        return input
+    }
+    readTouchInput(touchRecord){
+        const touch0 = touchRecord.touch0
+        const touch1 = touchRecord.touch1
+        const lastTouch = touch1 || touch0
+        const lastTouchX = lastTouch.x[lastTouch.x.length-1]
+        let input = 'middle'
+        if (lastTouchX < window.innerWidth/3) input = 'left'
+        if (lastTouchX > window.innerWidth*(2/3)) input = 'right'
+        if (touchRecord.touch0 && touchRecord.touch1) input = 'middle'
+        if ((touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) ||
+            (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)) input = 'attack'
+        return input
+    }
+}
 
 class Stats {
     constructor(game){
@@ -191,12 +222,209 @@ class Stats {
     spawnCoin(posXAtBase,startingY,heightOffset){
         this.game.activeObjects.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.centerX-300,this.centerY, this))
     }
+}
+
+class GameState {
+    constructor(game){
+        this.game = game
+        this.ctx = game.ctx
+    }
+    enter(){}
+    exit(){}
+    update(){}
+    draw(){}
+}
+class Paused extends GameState {
+    constructor(game){
+        super(game)
+    }
+    enter(){ document.getElementById("resume-btn").classList.remove("disabled")}
+    update(input){ if (document.fullscreenElement) this.game.changeState("playing") }
+}
+class Initializing extends GameState {
+    constructor(game){
+        super(game)
+    }
+    enter(){
+        for (let i = 0; i < 450; i++) {
+            this.game.states.playing.handleBackground();
+            this.game.activeObjects.forEach(e=>e.update())
+        }
+        for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(400-(i*30),i*10-20))
+    }
+    update(input){ this.game.changeState("playing") }
+    draw(ctx){ return }
     
-    
+}
+class Playing extends GameState {
+    constructor(game){
+        super(game)
+        this.framesSinceBowman = 0;
+        this.treesDelay = 40;
+        this.bowmanDelay = 0
+        this.shadowCanvas = document.createElement("canvas")
+        this.shadowCanvas.width = this.game.width
+        this.shadowCanvas.height = this.game.height
+        this.ctxShadow = this.shadowCanvas.getContext("2d")
+        this.gradient = this.ctx.createLinearGradient(0,0,0,200)
+        this.gradient.addColorStop(1,"#b5dae5")
+        this.gradient.addColorStop(0,"#0072b6")
+    }
+    update(input){
+        if (!document.fullscreenElement) {
+            this.game.changeState("paused")
+            return
+        }
+        this.game.totalFrames++;
+        this.game.gameProgess += 1*this.game.speedModifier
+        this.handleEnemies();
+        this.handleBackground();
+        this.game.stats.update();
+        this.game.activeObjects.forEach((e)=>e.update())
+        this.game.player.update(input)
+        this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
+        this.game.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        this.draw(this.ctx);   
+    }
+    handleEnemies(){
+        let startingY = 0.15 * GameObj.height + GameObj.topY
+        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingY);
+        else this.framesSinceBowman += this.game.speedModifier;
+        if (this.game.health < 0.5) {
+            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.game.width/2,startingY))
+        }
+    }
+    spawnBowWave(startingY){
+        this.game.activeObjects.push(...Bowman.spawnWave(this.game,startingY,randomInt(2,3)))
+        this.framesSinceBowman = 0
+        this.bowmanDelay = 400
+    }
+    handleBackground(){
+        if (this.treesDelay <= 0) {
+            Tree.spawnWave(this.game)
+            this.treesDelay += Math.floor(40/this.game.speedModifier)
+        } else this.treesDelay -= 1
+        if (this.treesDelay === Math.floor(20/this.game.speedModifier)) this.createBush();
+    }
+    createBush(){
+        this.game.activeObjects.unshift(new Bush((this.game.width/2+randomValue(925,1025)*randomSign())))
+        if (Math.abs(Bush.centerOffsetBias) > 1200) {
+                this.game.activeObjects[0].maxCenterOffset *= -1
+                Bush.centerOffsetBias = 0;
+        }
+    }
+    draw(){
+        this.ctx.clearRect(0, 0, this.game.width, this.game.height);
+        this.ctxShadow.clearRect(0,0,this.game.width,this.game.height)
+        this.drawStaticBackground();
+        this.overlayShadows()
+        this.game.activeObjects.forEach(e => e.draw(this.ctx))
+        this.game.player.draw(this.ctx)
+        this.game.stats.draw(this.ctx);
+    }
+    overlayShadows(){
+        this.game.activeObjects.forEach(e => e.drawShadow(this.ctxShadow))
+        this.ctxShadow.clearRect(0, 0, this.game.width, GameObj.startY)
+        this.ctx.globalAlpha = 0.5
+        this.ctx.drawImage(this.shadowCanvas,0,0,this.game.width,this.game.height)
+        this.ctx.globalAlpha = 1        
+    }
+    drawStaticBackground(){
+        this.ctx.fillStyle = this.gradient;        
+        this.ctx.fillRect(0,0,this.game.width,this.game.height)
+        GameObj.drawRoad(this.ctx)
+    }
+}
+class GameOver extends GameState {
+    constructor(game){
+        super(game)
+
+    }
+    update(input){
+        
+    }
+}
+class GameCompletion extends GameState {
+    constructor(game){
+        super(game)
+
+    }
+    update(input){
+        
+    }
+}
+
+class Game {
+    constructor(ctx, width, height, bitmaps){
+        this.ctx = ctx;
+        this.width = width;
+        this.height = height;
+        this.lastTimeStamp = 0;
+        this.frameTimeDeficit = 0;
+        this.totalFrames = 0;
+        this.fps = 48;
+        this.gameProgress = 0
+        this.speedModifier = 1;
+        this.health = 1 //move this into the player class (might to fix my stats page first)
+        this.activeObjects = []
+        this.player = new Player(this, bitmaps.block, bitmaps.attack)
+        this.stats = new Stats(this)
+        this.inputHandler = new InputHandler(this)
+        this.states = { initializing: new Initializing(this), playing: new Playing(this), paused: new Paused(this),
+            gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
+        this.state = this.states.initializing
+        this.state.enter();
+    }
+    update(timestamp, keyRecord, touchRecord){
+        const input = this.inputHandler.readInput(keyRecord, touchRecord)
+        const framesDue = this.getFramesDue(timestamp)
+        if (framesDue !== 0) {
+            this.state.update(input)
+            this.draw(this.ctx)
+        }
+    }
+    draw(ctx){
+        this.state.draw(ctx)
+    }
+    changeState(state){
+        this.state.exit();
+        this.state = this.states[state]
+        this.state.enter();
+    }
+    getFramesDue(timestamp){
+        const frameTime = timestamp - this.lastTimeStamp
+        this.frameTimeDeficit += frameTime;
+        this.lastTimeStamp = timestamp;
+        const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
+        this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
+        return framesDue;
+    }
+    updateGameSpeed(num){
+        this.speedModifier = num
+        console.log(this.speedModifier)
+        GameObj.scrollSpeed = 8*this.speedModifier;
+        this.setViewDistance(0.22 - ((1/12)*(num-1)))
+    }
+    setBaseStartPoint(y=1000){
+        const difference = GameObj.bottomY - y
+        GameObj.setPerspective(y,GameObj.height,GameObj.baseWidth,GameObj.startPercentage,GameObj.scrollSpeed)
+    }
+    setViewDistance(startPercentage){
+        GameObj.startPercentage = startPercentage
+        GameObj.startY = GameObj.topY + (GameObj.height * GameObj.startPercentage)
+    }
+    changePerspectiveHeight(height){
+        const heightDifference = GameObj.height-height
+        const newGameSpeed = 8 * this.speedModifier * (height/725)
+        const baseAdjustment = heightDifference/3
+        const ratio = (baseAdjustment+GameObj.baseWidth) / GameObj.baseWidth
+        this.activeObjects.forEach((e)=> { if (!(e instanceof SkyLayer)) e.maxCenterOffset *= ratio})
+        GameObj.setPerspective(GameObj.bottomY,height,GameObj.baseWidth+baseAdjustment,GameObj.startPercentage,newGameSpeed)
+    }
 }
 
 
-class Game{
+class Game_1{
     constructor(ctx, width, height, bitmaps){
         this.ctx = ctx;
         this.width = width;
@@ -208,14 +436,11 @@ class Game{
         this.framesSinceBowman = 0;
         this.treesDelay = 40;
         this.bowmanDelay = 0
-        this.bowmanDue = 3;
         this.totalFrames = 0;
         this.gameProgress = 0
         this.speedModifier = 1;
-        this.lanes = {left:0, middle:1, right:2}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
         this.stats = new Stats(this)
-        this.health = 1
         this.activeObjects = []
         this.input;
         this.shadowCanvas = document.createElement("canvas")
@@ -223,6 +448,7 @@ class Game{
         this.shadowCanvas.height = height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
         this.initalizeBackground();
+        this.inputHandler = new InputHandler(this)
     }
     update(timestamp, keyRecord, touchRecord){
         if (!document.fullscreenElement) {
@@ -233,7 +459,7 @@ class Game{
         if (framesDue !== 0) {
             this.totalFrames++;
             this.gameProgess += 1*this.speedModifier
-            this.handleInput(keyRecord, touchRecord);
+            this.input = this.inputHandler.readInput(keyRecord, touchRecord)
             this.stats.update()
             this.handleEnemies();
             this.handleBackground();
@@ -259,19 +485,13 @@ class Game{
     }
     handleBackground(){
         if (this.treesDelay <= 0) {
-            this.createDuelTrees();
+            Tree.spawnWave(this)
             this.treesDelay += Math.floor(40/this.speedModifier)
         } else this.treesDelay -= 1
         
         if (this.treesDelay === Math.floor(20/this.speedModifier)) {
             this.createBush();
         }
-    }
-    createDuelTrees(){
-       this.activeObjects.unshift(new Tree((this.width/2)+randomInt(1030,1070)))
-       this.activeObjects.unshift(new Tree((this.width/2)-randomInt(1030,1070)))
-       this.activeObjects[1].flipped = randomInt(0,1) === 1
-       this.activeObjects[0].flipped = randomInt(0,1) === 1
     }
     createBush(){
         this.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
@@ -325,29 +545,7 @@ class Game{
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
         return framesDue;
     }
-    handleInput(keyRecord, touchRecord){
-        if (keyRecord.includes('a') && keyRecord.includes('b') && keyRecord.includes('c')){
-            alert("cheats activated")
-        }
-        let input = 'middle'
-        if (Object.keys(touchRecord).length === 0){
-            if (keyRecord.includes('a')) input = 'left'
-            if (keyRecord.includes('d')) input = 'right'
-            if (keyRecord.includes('a') && keyRecord.includes('d')) input = 'middle'
-            if (keyRecord.includes(' ')) input = 'attack'
-        } else {
-            const touch0 = touchRecord.touch0
-            const touch1 = touchRecord.touch1
-            const lastTouch = touch1 || touch0
-            const lastTouchX = lastTouch.x[lastTouch.x.length-1]
-            if (lastTouchX < window.innerWidth/3) input = 'left'
-            if (lastTouchX > window.innerWidth*(2/3)) input = 'right'
-            if (touchRecord.touch0 && touchRecord.touch1) input = 'middle'
-            if ((touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) ||
-                (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)) input = 'attack'
-        }
-        this.input = input;
-    }
+    
     perspectiveTestListeners(){
         let startPercentAdjust = -0.01
         window.addEventListener('mousedown', (e) => {
@@ -518,6 +716,13 @@ class GroundedObjects extends GameObj {
 }
 
 class Tree extends GroundedObjects {
+    static spawnWave(game){
+        const width = game.width
+        game.activeObjects.unshift(new Tree((width/2)+randomInt(width+30,width+70)))
+        game.activeObjects.unshift(new Tree((width/2)-randomInt(width+30,width+70)))
+        game.activeObjects[1].flipped = randomInt(0,1) === 1
+        game.activeObjects[0].flipped = randomInt(0,1) === 1
+     }
     constructor(posXAtBase){
         let scaler = randomValue(0.9,1.1)
         const treePic = randomInt(1,6) === 2 ? 2 : 1   //1 in 4 chance for first tree in pic folder
@@ -894,7 +1099,7 @@ class Player{
         this.attack.alpha = 1;
         this.game = game;
         this.states = { blocking: new Blocking(this), attacking: new Attacking(this)}
-        this.lane = this.game.lanes["middle"]
+        this.lane = "middle"
         this.state = this.states.blocking;
         this.damageRecoveryEffect = 0;
         this.angleCounter = 0;
@@ -922,7 +1127,7 @@ class Player{
         this.sfx.hurt[sfxChoice].play();
         this.damageRecoveryEffect = 90
         this.game.stats.combo = 1
-        this.changeState("blocking")
+        this.changeState("blocking")  //change this to make it less punishing to get hit right after hitting attack?
     }
     applyBounce(){
         let damageBounceMod = 1;
@@ -939,20 +1144,18 @@ class Player{
         return (bounceOffset ) + this.damageRecoveryEffect
     }
 }
-
-class State{
-    constructor(state){
-        this.state = state
+class PlayerState {
+    constructor(player){
+        this.player = player
     }
     enter(){}
     exit(){}
     update(){}
 }
 
-class Blocking extends State {
+class Blocking extends PlayerState {
     constructor(player){
-        super("blocking")
-        this.player = player
+        super(player)
         this.sprite = this.player.block 
         this.sprite.frame = 18;
         this.frameIncrement = 1;
@@ -1017,10 +1220,9 @@ class Blocking extends State {
     }
 }
 
-class Attacking extends State {
+class Attacking extends PlayerState {
     constructor(player){
-        super("attacking")
-        this.player = player
+        super(player)
         this.sprite = this.player.attack
         this.activeFrameRange = [15,23]
         this.game = this.player.game
