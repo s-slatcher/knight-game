@@ -636,7 +636,8 @@ class GameObj {
         this.alpha = 1
         this.flipped = false;
         this.distanceFromBase = GameObj.bottomY - startingY
-        this.markedForDel = false;      
+        this.markedForDel = false;    
+        this.flash = true  
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
@@ -656,7 +657,7 @@ class GameObj {
         this.dx = (GameObj.baseCenterX - this.dw/2)
         this.percentTraveled = ((this.imageBaseY)-GameObj.topY) / GameObj.height
     }
-    draw(ctx){
+    draw(ctx){        
         if (this.imageBaseY < GameObj.startY && !showObjectsAtAnyDistance) return;
         if (this.alpha === 0) return;
         const {image, dx, dy, dw, dh} = this;
