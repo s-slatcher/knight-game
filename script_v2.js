@@ -1,10 +1,12 @@
 /** @type {HTMLCanvasElement} */
 
-//normal settings for all = false
-const loadBlankSprites = false;
+//normal settings for boolean is false
+const loadBlankSprites = true;
 const loadMuted = false;
-const disableEnemyDamage = false;
-const showObjectsAtAnyDistance = false; //laggy
+const disableEnemyDamage = true;
+const showObjectsAtAnyDistance = false;
+ //increase to test high game speeds, pair with disableEnemyDamage = true
+
 
 const canvas = document.getElementById("canvas1");
 const canvas2 = document.createElement("canvas")
@@ -45,10 +47,8 @@ const updateLoadScreen = function(){
         startButton.innerHTML = "Start Game"
         startButton.addEventListener('click',() => {   
         startButton.classList.add("disabled")
-        canvas.requestFullscreen().then(startGame());
-        
+        canvas.requestFullscreen().then(startGame()); 
     })}
-    
 }
 
 resumeButton.addEventListener('click', () => {
@@ -67,9 +67,6 @@ window.addEventListener('keyup', (e) => {
     keyRecord.splice(keyRecord.indexOf(key),1)
 })
 
-window.addEventListener('blur', () => keyRecord.splice(0,keyRecord.length))
-
-
 document.addEventListener("touchstart", e => {
     [...e.touches].forEach((touch) => {
         let id = touch.identifier
@@ -78,10 +75,8 @@ document.addEventListener("touchstart", e => {
             x: [touch.pageX],
             y: [touch.pageY]
         }
-        
     })
 })
-
 document.addEventListener("touchmove", e => {
     [...e.changedTouches].forEach(touch => {
         const id = touch.identifier 
@@ -89,15 +84,13 @@ document.addEventListener("touchmove", e => {
         touchRecord[`touch${id}`].y.push(touch.pageY)  
         })
     })
-
 document.addEventListener("touchend", e => {
     let id = [...e.changedTouches][0].identifier
     delete touchRecord[`touch${id}`]
 })
 
 class InputHandler {
-    constructor(game){
-        this.game = game
+    constructor(){
     }
     readInput(keyRecord, touchRecord){
         if (Object.keys(touchRecord).length === 0) return this.readKeyboardInput(keyRecord)
@@ -128,33 +121,11 @@ class InputHandler {
 
 class Stats {
     constructor(game){
-        this.game = game;
-        this.startFrame = 150
-        this.centerX = this.game.width/2
-        this.centerY = 100
-        this.currentScore = 0
-        this.targetScore = 0
-        this.combo = 1
-        this.targetCoins = 0
-        this.currentCoins = 0
-        this.scoreIncreaseDisplay = 0
+        this.game = game
         this.healthOverlays = []
-        this.coinImages = []
-        this.coinImage = 0
-        this.game.ctx.strokeStyle = 'black'
-        this.game.ctx.lineWidth = 5
-        this.font = "50px Lugrasimo"
-        this.game.ctx.font = this.font
-        this.createCoinImages() 
         this.createHealthOverlays()
     }    
-    createCoinImages(){
-        this.coinImages.push(new GameObj("",0,0))
-        for (let i = 0; i < 6; i++) {
-            this.coinImages
-                .push(new GameObj(`./images/coin_pile/${i+1}.png`,80,80,this.centerX-300,GameObj.bottomY,-1000+this.centerY+30))
-        }
-    }
+    
     createHealthOverlays(){
         this.healthOverlays.push(new GameObj("",0,0))
         for (let i = 0; i < 4; i++){
@@ -163,55 +134,9 @@ class Stats {
         }
     }
     update(){
-        if (this.targetCoins > this.currentCoins) this.updateCoins()
-        if (this.targetScore > this.currentScore) this.updateScore()
-        this.updateSpeedModifier()
-    }
-    updateCoins() {
-        this.currentCoins++
-        if (this.coinImage === 0) this.coinImage++
-        if (this.coinImage === 6) return;
-        if (this.currentCoins > Math.pow((this.coinImage+3),3)) this.coinImage++
-    }
-    updateScore() {
-        let difference = this.targetScore - this.currentScore
-        let increment = (Math.sqrt(difference))/3
-        if (increment > 200) increment = 200
-        if (increment < 0.5) increment = 0.2
-        this.currentScore += increment
-    }
-    updateSpeedModifier(){
-        let newSpeed = round((1 + (Math.sqrt((this.combo-1)/40))),2)
-        if (newSpeed != this.game.speedModifier) this.game.updateGameSpeed(newSpeed)
-    }
-    addScore(num){
-        let score = num * this.combo
-        this.targetScore += score
-        this.scoreIncreaseDisplay += score
-        if (num > 5) this.combo += 1
     }
     draw(ctx){
-        ctx.fillStyle = "black"
-        this.drawStrokedText(ctx,`${this.currentCoins}`, this.centerX-250, this.centerY+15)
-        this.coinImages[this.coinImage].draw(ctx)
-        let displayScore = Math.floor(this.currentScore)
-        let remainder = this.targetScore - displayScore
-        let scoreDimensions = ctx.measureText(`${displayScore}`)
-        this.drawStrokedText(ctx,`${displayScore}`, this.centerX - (scoreDimensions.width/2), this.centerY+15)
-        if(remainder > 0) {
-            ctx.font = "30px Lugrasimo"
-            ctx.fillText(`+${this.scoreIncreaseDisplay}`,this.centerX + (scoreDimensions.width/2) + 5, this.centerY+15)
-            ctx.font = this.font
-        } else {
-            this.scoreIncreaseDisplay = 0;
-        }
-        this.drawStrokedText(ctx,`ₓ${this.combo}`, this.centerX+225, this.centerY+15)
         this.drawHealthOverlay(ctx)
-    }
-    drawStrokedText(ctx,text,x,y){
-        ctx.strokeText(text,x,y)
-        ctx.fillStyle = 'white'
-        ctx.fillText(text,x,y)
     }
     drawHealthOverlay(ctx){
         let healthImageIndex = Math.ceil(5-(this.game.health*5))
@@ -219,8 +144,116 @@ class Stats {
         if (healthImageIndex > 4) healthImageIndex = 4 
         this.healthOverlays[healthImageIndex].draw(ctx)
     }
-    spawnCoin(posXAtBase,startingY,heightOffset){
-        this.game.activeObjects.push(new Coin(posXAtBase,startingY+40,heightOffset-40,this.centerX-300,this.centerY, this))
+
+}
+
+//redo this class, it doenst need to handle dynamic updating text itself. it just handles figuring out how it should be drawn with the value it is given. 
+// instead there will be classes that hold GameText objects and update them using the dynamic values like score and combo they are passed each frame.
+class GameText {
+    
+    static standardStroked(content,centerX,baseY){
+        const font = "50px Lugrasimo"
+        const stroke = 4
+        return new GameText(content,font,centerX,baseY,stroke,"white","black")
+    }
+    static small(content,centerX,baseY){
+        const font = "35px Lugrasimo"
+        const stroke = 2
+        return new GameText(content,font,centerX,baseY,stroke,"white","black")
+    }
+    static currentFont = "50px Lugrasimo"
+    constructor(content,font,centerX,baseY,stroke,color,strokeColor){
+        this.content = content 
+        this.centerX = centerX
+        this.baseY = baseY
+        this.font = font
+        this.stroke = stroke
+        this.color = color
+        this.strokeColor = strokeColor
+    }
+    draw(ctx){
+        if (this.content === "") return;
+        if (!this.dimensions) this.dimensions = ctx.measureText(this.content)
+        const x = this.centerX - (this.dimensions.width/2)
+        const y = this.baseY
+        if (this.font !== GameText.currentFont) {
+            ctx.font = this.font
+            GameText.currentFont = this.font
+        }
+        if (this.stroke > 0){
+            ctx.lineWidth = this.stroke
+            ctx.strokeText(this.content,x,y)
+        }
+        ctx.fillStyle = this.color
+        ctx.fillText(this.content,x,y)
+    }
+}
+
+class IncrementingText {
+    constructor(gameTextInstance,incrementSpeedFactor=0){
+        if (isNaN(+gameTextInstance.content)) gameTextInstance.content = 0;
+        this.text = gameTextInstance
+        this.incrementSpeedFactor = incrementSpeedFactor
+        this.incrementJumpPoint = 0.1*this.incrementSpeedFactor
+        this.targetValue = +this.text.content
+        this.currentValue = +this.text.content
+        this.secondaryText = []
+    }
+    update(num){
+        if (this.targetValue !== num) this.generateSecondaryText(num)
+        this.targetValue = num 
+        const difference = this.targetValue - this.currentValue
+        this.secondaryText.forEach(e=>e.update())
+        if (difference === 0) return;
+        const sign = Math.sign(difference)
+        const absDifference = Math.abs(difference)
+        let increment = (Math.sqrt(absDifference)) * this.incrementSpeedFactor * sign
+        if (Math.abs(increment) < this.incrementJumpPoint || Math.abs(increment) > absDifference) increment = difference
+        this.currentValue += increment
+        this.text.content = Math.floor(this.currentValue)
+        this.text.dimensions = undefined;
+        
+        
+    }
+    generateSecondaryText(num){
+        const difference = num - this.targetValue
+        const content = `${difference < 0 ? "" : "+"}${difference}`
+        const centerX = this.text.centerX + this.text.dimensions.width/2
+        const baseY = this.text.baseY
+        const secondaryText = AnimatedText.positive(GameText.small(content,centerX,baseY))
+        this.secondaryText.push(secondaryText)
+    }
+    draw(ctx){
+        this.text.draw(ctx)
+        this.secondaryText.forEach(e=>e.draw(ctx))
+    }
+}
+
+class AnimatedText {
+    static positive(gameTextInstance){
+        gameTextInstance.color = "white"
+        return new AnimatedText(gameTextInstance,-8,12)
+    }
+    static negative(gameTextInstance){
+        gameTextInstance.color = "red"
+        return new AnimatedText(gameTextInstance,+8,12)
+    }
+    constructor(gameTextInstance,velY,movementFrameSpan){
+        this.text = gameTextInstance
+        this.velY = velY
+        this.movementFrameSpan = movementFrameSpan
+        this.framesActive = 0
+        this.markedForDel = false;
+    }
+    update(){
+        this.framesActive += 1
+        if (this.framesActive > this.movementFrameSpan) return;
+        this.text.baseY += this.velY
+        this.velY *= 0.9
+    }
+    draw(ctx){
+        if (this.framesActive > this.movementFrameSpan*1.5) return;
+        this.text.draw(ctx)
     }
 }
 
@@ -228,6 +261,8 @@ class GameState {
     constructor(game){
         this.game = game
         this.ctx = game.ctx
+        this.width =  game.width
+        this.height = game.height
     }
     enter(){}
     exit(){}
@@ -244,13 +279,14 @@ class Paused extends GameState {
 class Initializing extends GameState {
     constructor(game){
         super(game)
+        this.ctx.font = "50px Lugrasimo"
     }
     enter(){
         for (let i = 0; i < 450; i++) {
             this.game.states.playing.handleBackground();
             this.game.activeObjects.forEach(e=>e.update())
         }
-        for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(400-(i*30),i*10-20))
+        for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(400-(i*30),i*6-20))
     }
     update(input){ this.game.changeState("playing") }
     draw(ctx){ return }
@@ -263,12 +299,13 @@ class Playing extends GameState {
         this.treesDelay = 40;
         this.bowmanDelay = 0
         this.shadowCanvas = document.createElement("canvas")
-        this.shadowCanvas.width = this.game.width
-        this.shadowCanvas.height = this.game.height
+        this.shadowCanvas.width = this.width
+        this.shadowCanvas.height = this.height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
         this.gradient = this.ctx.createLinearGradient(0,0,0,200)
         this.gradient.addColorStop(1,"#b5dae5")
         this.gradient.addColorStop(0,"#0072b6")
+        
     }
     update(input){
         if (!document.fullscreenElement) {
@@ -285,13 +322,14 @@ class Playing extends GameState {
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
         this.game.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
         this.draw(this.ctx);   
+        
     }
     handleEnemies(){
         let startingY = 0.15 * GameObj.height + GameObj.topY
         if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingY);
         else this.framesSinceBowman += this.game.speedModifier;
         if (this.game.health < 0.5) {
-            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.game.width/2,startingY))
+            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.width/2,startingY))
         }
     }
     spawnBowWave(startingY){
@@ -307,33 +345,35 @@ class Playing extends GameState {
         if (this.treesDelay === Math.floor(20/this.game.speedModifier)) this.createBush();
     }
     createBush(){
-        this.game.activeObjects.unshift(new Bush((this.game.width/2+randomValue(925,1025)*randomSign())))
+        this.game.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
         if (Math.abs(Bush.centerOffsetBias) > 1200) {
                 this.game.activeObjects[0].maxCenterOffset *= -1
                 Bush.centerOffsetBias = 0;
         }
     }
     draw(){
-        this.ctx.clearRect(0, 0, this.game.width, this.game.height);
-        this.ctxShadow.clearRect(0,0,this.game.width,this.game.height)
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctxShadow.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground();
         this.overlayShadows()
         this.game.activeObjects.forEach(e => e.draw(this.ctx))
         this.game.player.draw(this.ctx)
         this.game.stats.draw(this.ctx);
+        this.game.statsHandler.draw(this.ctx)
     }
     overlayShadows(){
         this.game.activeObjects.forEach(e => e.drawShadow(this.ctxShadow))
-        this.ctxShadow.clearRect(0, 0, this.game.width, GameObj.startY)
+        this.ctxShadow.clearRect(0, 0, this.width, GameObj.startY)
         this.ctx.globalAlpha = 0.5
-        this.ctx.drawImage(this.shadowCanvas,0,0,this.game.width,this.game.height)
+        this.ctx.drawImage(this.shadowCanvas,0,0,this.width,this.height)
         this.ctx.globalAlpha = 1        
     }
     drawStaticBackground(){
         this.ctx.fillStyle = this.gradient;        
-        this.ctx.fillRect(0,0,this.game.width,this.game.height)
+        this.ctx.fillRect(0,0,this.width,this.height)
         GameObj.drawRoad(this.ctx)
     }
+    
 }
 class GameOver extends GameState {
     constructor(game){
@@ -365,15 +405,18 @@ class Game {
         this.fps = 48;
         this.gameProgress = 0
         this.speedModifier = 1;
-        this.health = 1 //move this into the player class (might to fix my stats page first)
+        this.health = 1 //move this into the player class (will need to fix my stats class first)
         this.activeObjects = []
+        this.stats_test = {score:0, coins: 500, combo: 1}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
         this.stats = new Stats(this)
-        this.inputHandler = new InputHandler(this)
+        this.statsHandler = new StatsHandler(this)
+        this.inputHandler = new InputHandler()
         this.states = { initializing: new Initializing(this), playing: new Playing(this), paused: new Paused(this),
-            gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
+                        gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
+
     }
     update(timestamp, keyRecord, touchRecord){
         const input = this.inputHandler.readInput(keyRecord, touchRecord)
@@ -381,6 +424,8 @@ class Game {
         if (framesDue !== 0) {
             this.state.update(input)
             this.draw(this.ctx)
+            this.statsHandler.update(this.stats_test)
+            this.updateSpeedModifier()
         }
     }
     draw(ctx){
@@ -391,6 +436,19 @@ class Game {
         this.state = this.states[state]
         this.state.enter();
     }
+    addScore(num){
+        let score = num * this.stats_test.combo
+        if (num > 5) this.stats_test.combo += 1
+        this.stats_test.score += score
+    }
+    updateSpeedModifier(){
+        let newSpeed = round((1 + (Math.sqrt((this.stats_test.combo-1)/25))),2)
+        if (newSpeed != this.speedModifier) {
+            this.speedModifier = newSpeed
+            GameObj.scrollSpeed = 8*this.speedModifier;
+            this.setViewDistance(0.22 - ((1/16)*(newSpeed-1)))
+        }
+    }
     getFramesDue(timestamp){
         const frameTime = timestamp - this.lastTimeStamp
         this.frameTimeDeficit += frameTime;
@@ -398,12 +456,6 @@ class Game {
         const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
         this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
         return framesDue;
-    }
-    updateGameSpeed(num){
-        this.speedModifier = num
-        console.log(this.speedModifier)
-        GameObj.scrollSpeed = 8*this.speedModifier;
-        this.setViewDistance(0.22 - ((1/12)*(num-1)))
     }
     setBaseStartPoint(y=1000){
         const difference = GameObj.bottomY - y
@@ -423,168 +475,43 @@ class Game {
     }
 }
 
+class StatsHandler {
+    constructor(game){
+        this.game = game
+        this.scoreDisplay = new IncrementingText(GameText.standardStroked("0",500,100),0.5)
+        this.comboDisplay = GameText.standardStroked(`ₓ1`,750,100)
+        this.coinsNumDisplay = GameText.standardStroked("0",250,100)
+        this.generateCoinImages()
+        this.coinImage = 0;
+    }
+    update({score,coins,combo}){
+        this.scoreDisplay.update(score)
+        this.comboDisplay.content = `ₓ${combo}`
+        this.coinsNumDisplay.content = `${coins}`
+        this.updateCoinImage(coins)
+    }
+    draw(ctx){
+        this.scoreDisplay.draw(ctx)
+        this.comboDisplay.draw(ctx)
+        this.coinsNumDisplay.draw(ctx)
+        this.coinImages[this.coinImage].draw(ctx)
+    }
+    generateCoinImages(){
+        this.coinImages = []
+        this.coinImages.push(new GameObj("",0,0))
+        for (let i = 0; i < 6; i++) {
+            const imgSrc = `./images/coin_pile/${i+1}.png`
+            this.coinImages
+                .push(new GameObj(imgSrc,80,80,175,GameObj.bottomY,-1000+115))
+        }
+    }
+    updateCoinImage(coins){
+        if (this.coinImage === 0 && coins > 0) this.coinImage = 1
+        if (this.coinImage === 6) return;
+        if (coins > Math.pow((this.coinImage+3),3)) this.coinImage++
+    }
 
-class Game_1{
-    constructor(ctx, width, height, bitmaps){
-        this.ctx = ctx;
-        this.width = width;
-        this.height = height;
-        this.lastTimeStamp = 0;
-        this.frameTimeDeficit = 0;
-        this.fps = 48;
-        this.health = 1
-        this.framesSinceBowman = 0;
-        this.treesDelay = 40;
-        this.bowmanDelay = 0
-        this.totalFrames = 0;
-        this.gameProgress = 0
-        this.speedModifier = 1;
-        this.player = new Player(this, bitmaps.block, bitmaps.attack)
-        this.stats = new Stats(this)
-        this.activeObjects = []
-        this.input;
-        this.shadowCanvas = document.createElement("canvas")
-        this.shadowCanvas.width = width
-        this.shadowCanvas.height = height
-        this.ctxShadow = this.shadowCanvas.getContext("2d")
-        this.initalizeBackground();
-        this.inputHandler = new InputHandler(this)
-    }
-    update(timestamp, keyRecord, touchRecord){
-        if (!document.fullscreenElement) {
-            document.getElementById("resume-btn").classList.remove("disabled")
-            return
-        }
-        const framesDue = this.getFramesDue(timestamp)
-        if (framesDue !== 0) {
-            this.totalFrames++;
-            this.gameProgess += 1*this.speedModifier
-            this.input = this.inputHandler.readInput(keyRecord, touchRecord)
-            this.stats.update()
-            this.handleEnemies();
-            this.handleBackground();
-            this.activeObjects.forEach((e)=>e.update())
-            this.player.update(this.input)
-            this.activeObjects = this.activeObjects.filter((e)=>!e.markedForDel)
-            this.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
-            this.draw(this.ctx);   
-        }
-    }
-    updateGameSpeed(num){
-        this.speedModifier = num
-        console.log(this.speedModifier)
-        GameObj.scrollSpeed = 8*this.speedModifier;
-        this.setViewDistance(0.22 - ((1/12)*(num-1)))
-    }
-    initalizeBackground(){
-        for (let i = 0; i < 450; i++) {
-            this.handleBackground();
-            this.activeObjects.forEach(e=>e.update())
-        }
-        for (let i = 0; i < 7; i++) this.activeObjects.push(new SkyLayer(400-(i*30),i*10-20))
-    }
-    handleBackground(){
-        if (this.treesDelay <= 0) {
-            Tree.spawnWave(this)
-            this.treesDelay += Math.floor(40/this.speedModifier)
-        } else this.treesDelay -= 1
-        
-        if (this.treesDelay === Math.floor(20/this.speedModifier)) {
-            this.createBush();
-        }
-    }
-    createBush(){
-        this.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
-        if (Math.abs(Bush.centerOffsetBias) > 1200) {
-                this.activeObjects[0].maxCenterOffset *= -1
-                Bush.centerOffsetBias = 0;
-        }
-    }
-    handleEnemies(){
-        let startingY = 0.15 * GameObj.height + GameObj.topY
-        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingY);
-        else this.framesSinceBowman += this.speedModifier;
-        if (this.health < 0.5) {
-            if(Turkey.turkeySpawnable()) this.activeObjects.push(new Turkey(this,this.width/2,startingY))
-        }
-    }
-    spawnBowWave(startingY){
-        this.activeObjects.push(...Bowman.spawnWave(this,startingY,randomInt(2,3)))
-        this.framesSinceBowman = 0
-        this.bowmanDelay = 400
-    }
-    draw(){
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        this.ctxShadow.clearRect(0,0,this.width,this.height)
-        this.drawStaticBackground(this.ctx);
-        this.overlayShadows()
-        this.activeObjects.forEach(e => e.draw(this.ctx))
-        this.player.draw(this.ctx)
-        this.stats.draw(this.ctx);
-    }
-    overlayShadows(){
-        this.activeObjects.forEach(e => e.drawShadow(this.ctxShadow))
-        this.ctxShadow.clearRect(0, 0, this.width, GameObj.startY)
-        this.ctx.globalAlpha = 0.5
-        this.ctx.drawImage(this.shadowCanvas,0,0,this.width,this.height)
-        this.ctx.globalAlpha = 1        
-    }
-    drawStaticBackground(ctx){
-        const gradient = ctx.createLinearGradient(0,0,0,200)
-        gradient.addColorStop(1,"#b5dae5")
-        gradient.addColorStop(0,"#0072b6")
-        ctx.fillStyle = gradient;        
-        ctx.fillRect(0,0,this.width,this.height)
-        GameObj.drawRoad(ctx)
-    }
-    getFramesDue(timestamp){
-        const frameTime = timestamp - this.lastTimeStamp
-        this.frameTimeDeficit += frameTime;
-        this.lastTimeStamp = timestamp;
-        const framesDue = Math.floor(this.frameTimeDeficit / (1000/this.fps));
-        this.frameTimeDeficit = this.frameTimeDeficit % (1000/this.fps);
-        return framesDue;
-    }
-    
-    perspectiveTestListeners(){
-        let startPercentAdjust = -0.01
-        window.addEventListener('mousedown', (e) => {
-            e.preventDefault()
-            if (e.button === 0) this.setBaseStartPoint(GameObj.bottomY+5)
-            if (e.button === 1) {
-                if (GameObj.startPercentage < 0.15 || GameObj.startPercentage > 0.23) startPercentAdjust *= -1
-                this.setViewDistance(GameObj.startPercentage+startPercentAdjust)
-            }
-            })
-        window.addEventListener('contextmenu', (e) => { 
-            e.preventDefault();
-            this.setBaseStartPoint(GameObj.bottomY-5)
-        })
-        window.addEventListener('wheel', (e) => {
-            let newHeight = GameObj.height + (20 * Math.sign(e.deltaY))
-            this.changePerspectiveHeight(newHeight)
-        })
-    }
-    setBaseStartPoint(y=1000){
-        const difference = GameObj.bottomY - y
-        GameObj.setPerspective(y,GameObj.height,GameObj.baseWidth,GameObj.startPercentage,GameObj.scrollSpeed)
-    }
-    setViewDistance(startPercentage){
-        GameObj.startPercentage = startPercentage
-        GameObj.startY = GameObj.topY + (GameObj.height * GameObj.startPercentage)
-    }
-    changePerspectiveHeight(height){
-        const heightDifference = GameObj.height-height
-        const newGameSpeed = 8 * this.speedModifier * (height/725)
-        const baseAdjustment = heightDifference/3
-        const ratio = (baseAdjustment+GameObj.baseWidth) / GameObj.baseWidth
-        this.activeObjects.forEach((e)=> { if (!(e instanceof SkyLayer)) e.maxCenterOffset *= ratio})
-        GameObj.setPerspective(GameObj.bottomY,height,GameObj.baseWidth+baseAdjustment,GameObj.startPercentage,newGameSpeed)
-        
-    }
-    
 }
-
 
 class GameObj {
     static setPerspective(bottomY=canvas.height, perspectiveHeight=725, basesWidth=1000, startPercentage=0.22, scrollSpeed=8){
@@ -637,7 +564,6 @@ class GameObj {
         this.flipped = false;
         this.distanceFromBase = GameObj.bottomY - startingY
         this.markedForDel = false;    
-        this.flash = true  
     }
     get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
     get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
@@ -703,6 +629,8 @@ class GameObj {
     }
 }
 GameObj.setPerspective();
+
+
 
 class GroundedObjects extends GameObj {
     static activeObjects = []
@@ -850,7 +778,7 @@ class FiredArrow extends Projectile {
             const velocityDirection = -Math.sign(this.velX)
             const arrowDestinationX = GameObj.baseCenterX + velocityDirection*150
             this.game.activeObjects.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
-            this.game.stats.addScore(2)
+            this.game.addScore(2)
         } else this.player.receiveAttack(this)
         
     }
@@ -916,9 +844,9 @@ class TurkeyMush extends Spurt {
 
 class Coin extends Projectile{
     static lastSfxValue = 0 
-    constructor(x,y,heightOffset,targetX, targetY, stats){
+    constructor(x,y,heightOffset,targetX, targetY, game){
         super(`./images/coin.png`,55*0.6,42*0.6,x+randomValue(-10,10),y,heightOffset+randomValue(-10,10),0,0,randomValue(0,2),0)
-        this.stats = stats
+        this.game = game
         this.targetX = targetX + randomValue(-80,80)
         this.targetY = targetY
         this.velY = (y - this.targetY)/ 100  
@@ -937,7 +865,7 @@ class Coin extends Projectile{
         if (this.alpha <= 0) {
             this.markedForDel = true;
             this.sfx.play(); 
-            this.stats.targetCoins += 1       
+            this.game.stats_test.coins += 1       
         }    
     }
     setSfx(){
@@ -973,10 +901,15 @@ class Enemy extends GameObj {
         this.shadow.src = "./images/shadow_small.png"
         Enemy.enemies.push(this)
     }
-    spawnCoins(amount){
+    spawnCoins(num){
         const {posXAtBase,imageBaseY,maxHeight} = this
-        for (let i = 0; i < amount; i++) {
-           this.game.stats.spawnCoin(posXAtBase,imageBaseY,-maxHeight/2) 
+        const target = this.game.statsHandler.coinImages[1]
+        const targetX = target.centerX
+        const targetY = 1000+target.maxHeightOffset
+        console.log(targetX,targetY)
+        for (let i = 0; i < num; i++) {
+            const coin = new Coin(posXAtBase,imageBaseY+40,-maxHeight/2,targetX,targetY, this.game)
+            this.game.activeObjects.push(coin)
         } 
     }
     drawShadow(ctx){
@@ -1049,7 +982,7 @@ class Bowman extends Enemy {
             this.game.activeObjects.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
         }
         this.spawnCoins(5)
-        this.game.stats.addScore(10)
+        this.game.addScore(10)
     }
     drawShadow(ctx){
         return;
@@ -1330,5 +1263,3 @@ function animate(timestamp, game){
         animate(timestamp, game)
     })
 }
-
-
