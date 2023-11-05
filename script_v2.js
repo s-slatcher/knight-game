@@ -1,9 +1,9 @@
 /** @type {HTMLCanvasElement} */
 
 //normal settings for boolean is false
-const loadBlankSprites = true;
+const loadBlankSprites = false;
 const loadMuted = false;
-const disableEnemyDamage = true;
+const disableEnemyDamage = false;
 const showObjectsAtAnyDistance = false;
  //increase to test high game speeds, pair with disableEnemyDamage = true
 
