@@ -1,11 +1,10 @@
 /** @type {HTMLCanvasElement} */
 
-//normal settings for boolean is false
+//normal settings for all is false
 const loadBlankSprites = false;
-const loadMuted = false;
+const gameMuted = false;
 const disableEnemyDamage = false;
-const showObjectsAtAnyDistance = false;
- //increase to test high game speeds, pair with disableEnemyDamage = true
+const showElementsAtAnyDistance = false;
 
 
 const canvas = document.getElementById("canvas1");
@@ -118,39 +117,7 @@ class InputHandler {
         return input
     }
 }
-
-class Stats {
-    constructor(game){
-        this.game = game
-        this.healthOverlays = []
-        this.createHealthOverlays()
-    }    
-    
-    createHealthOverlays(){
-        this.healthOverlays.push(new GameObj("",0,0))
-        for (let i = 0; i < 4; i++){
-            this.healthOverlays
-                .push(new GameObj(`./images/health/stage${i+1}.png`,1000,1000,undefined,GameObj.bottomY))
-        }
-    }
-    update(){
-    }
-    draw(ctx){
-        this.drawHealthOverlay(ctx)
-    }
-    drawHealthOverlay(ctx){
-        let healthImageIndex = Math.ceil(5-(this.game.health*5))
-        if (healthImageIndex < 0) healthImageIndex=0
-        if (healthImageIndex > 4) healthImageIndex = 4 
-        this.healthOverlays[healthImageIndex].draw(ctx)
-    }
-
-}
-
-//redo this class, it doenst need to handle dynamic updating text itself. it just handles figuring out how it should be drawn with the value it is given. 
-// instead there will be classes that hold GameText objects and update them using the dynamic values like score and combo they are passed each frame.
 class GameText {
-    
     static standardStroked(content,centerX,baseY){
         const font = "50px Lugrasimo"
         const stroke = 4
@@ -200,10 +167,10 @@ class IncrementingText {
         this.secondaryText = []
     }
     update(num){
+        this.secondaryText.forEach(e=>e.update())
         if (this.targetValue !== num) this.generateSecondaryText(num)
         this.targetValue = num 
         const difference = this.targetValue - this.currentValue
-        this.secondaryText.forEach(e=>e.update())
         if (difference === 0) return;
         const sign = Math.sign(difference)
         const absDifference = Math.abs(difference)
@@ -212,8 +179,6 @@ class IncrementingText {
         this.currentValue += increment
         this.text.content = Math.floor(this.currentValue)
         this.text.dimensions = undefined;
-        
-        
     }
     generateSecondaryText(num){
         const difference = num - this.targetValue
@@ -316,7 +281,6 @@ class Playing extends GameState {
         this.game.gameProgess += 1*this.game.speedModifier
         this.handleEnemies();
         this.handleBackground();
-        this.game.stats.update();
         this.game.activeObjects.forEach((e)=>e.update())
         this.game.player.update(input)
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
@@ -358,7 +322,6 @@ class Playing extends GameState {
         this.overlayShadows()
         this.game.activeObjects.forEach(e => e.draw(this.ctx))
         this.game.player.draw(this.ctx)
-        this.game.stats.draw(this.ctx);
         this.game.statsHandler.draw(this.ctx)
     }
     overlayShadows(){
@@ -407,9 +370,8 @@ class Game {
         this.speedModifier = 1;
         this.health = 1 //move this into the player class (will need to fix my stats class first)
         this.activeObjects = []
-        this.stats_test = {score:0, coins: 500, combo: 1}
+        this.stats = {score:0, coins: 500, combo: 1}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
-        this.stats = new Stats(this)
         this.statsHandler = new StatsHandler(this)
         this.inputHandler = new InputHandler()
         this.states = { initializing: new Initializing(this), playing: new Playing(this), paused: new Paused(this),
@@ -424,7 +386,7 @@ class Game {
         if (framesDue !== 0) {
             this.state.update(input)
             this.draw(this.ctx)
-            this.statsHandler.update(this.stats_test)
+            this.statsHandler.update(this.stats)
             this.updateSpeedModifier()
         }
     }
@@ -437,13 +399,13 @@ class Game {
         this.state.enter();
     }
     addScore(num){
-        let score = num * this.stats_test.combo
-        if (num > 5) this.stats_test.combo += 1
-        this.stats_test.score += score
+        let score = num * this.stats.combo
+        if (num > 5) this.stats.combo += 1
+        this.stats.score += score
     }
     updateSpeedModifier(){
-        let newSpeed = round((1 + (Math.sqrt((this.stats_test.combo-1)/25))),2)
-        if (newSpeed != this.speedModifier) {
+        let newSpeed = 1 + (Math.pow((this.stats.combo-1)/25, (2/3)))
+        if (round(newSpeed,2) != this.speedModifier) {
             this.speedModifier = newSpeed
             GameObj.scrollSpeed = 8*this.speedModifier;
             this.setViewDistance(0.22 - ((1/16)*(newSpeed-1)))
@@ -584,7 +546,7 @@ class GameObj {
         this.percentTraveled = ((this.imageBaseY)-GameObj.topY) / GameObj.height
     }
     draw(ctx){        
-        if (this.imageBaseY < GameObj.startY && !showObjectsAtAnyDistance) return;
+        if (this.imageBaseY < GameObj.startY && !showElementsAtAnyDistance) return;
         if (this.alpha === 0) return;
         const {image, dx, dy, dw, dh} = this;
         const heightOffset = this.maxHeightOffset * this.percentTraveled 
@@ -685,7 +647,7 @@ class SkyLayer extends GameObj{
     constructor(startOffset, endOffset){
         super("./images/sky_layers/skylayer3.png",2500,2500,500,GameObj.bottomY-startOffset,0) //./images/skylayer3.png
         this.endOffset = endOffset
-        this.alpha = showObjectsAtAnyDistance ? 0 : 1
+        this.alpha = showElementsAtAnyDistance ? 0 : 1
     }
     get endPoint(){return GameObj.startY + this.endOffset}
     
@@ -779,7 +741,7 @@ class FiredArrow extends Projectile {
             const arrowDestinationX = GameObj.baseCenterX + velocityDirection*150
             this.game.activeObjects.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
             this.game.addScore(2)
-        } else this.player.receiveAttack(this)
+        } else this.player.receiveAttack(-0.4)
         
     }
 }
@@ -865,7 +827,7 @@ class Coin extends Projectile{
         if (this.alpha <= 0) {
             this.markedForDel = true;
             this.sfx.play(); 
-            this.game.stats_test.coins += 1       
+            this.game.stats.coins += 1       
         }    
     }
     setSfx(){
@@ -880,7 +842,7 @@ class Coin extends Projectile{
 class SoundEffect {
     constructor(fileSrc, volume){
         this.sound = new Audio()
-        this.sound.volume = loadMuted ? 0 : volume
+        this.sound.volume = gameMuted ? 0 : volume
         this.sound.src = fileSrc
     }
     play(){
@@ -1025,7 +987,7 @@ class Pikeman extends Enemy {
     }
 }
 
-class Player{
+class Player {
     constructor(game, blockBitmaps, attackBitmaps){
         this.block = new Sprite(blockBitmaps, 842, 609)
         this.attack = new Sprite(attackBitmaps, 534*0.8, 871*0.8, 200)
@@ -1037,9 +999,11 @@ class Player{
         this.state = this.states.blocking;
         this.damageRecoveryEffect = 0;
         this.angleCounter = 0;
+        this.health = 1
+        this.healthOverlays = [...this.createHealthOverlays()]
+        this.healthOverlayIndex = 0
         this.sfx = {hurt:[new SoundEffect(`./sounds/player_hurt/1.wav`,0.1), new SoundEffect(`./sounds/player_hurt/2.wav`,0.1),
                         new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
-        
     }
     update(input){
         this.state.update(input);
@@ -1048,20 +1012,30 @@ class Player{
     }
     draw(ctx){
         this.state.draw(ctx)
+        this.healthOverlays[this.healthOverlayIndex].draw(ctx)
     }
     changeState(state){
         this.state.exit();
         this.state = this.states[state]
         this.state.enter();
     }
-    receiveAttack(source){
+    receiveAttack(dmg){
         if (disableEnemyDamage) return;
         let sfxChoice = Math.floor(randomValue(0,4))
-        this.game.health -= 0.4
         this.sfx.hurt[sfxChoice].play();
         this.damageRecoveryEffect = 90
         this.game.stats.combo = 1
+        this.updateHealth(dmg)
         this.changeState("blocking")  //change this to make it less punishing to get hit right after hitting attack?
+    }
+    updateHealth(dmg){
+        console.log("damage taken: ",dmg)
+        this.health += dmg
+        let healthOverlayIndex = Math.ceil(5-(this.health*5))
+        if (healthOverlayIndex < 0) healthOverlayIndex = 0
+        if (healthOverlayIndex > 4) healthOverlayIndex = 4
+        this.healthOverlayIndex = healthOverlayIndex 
+        console.log(this.healthOverlayIndex)
     }
     applyBounce(){
         let damageBounceMod = 1;
@@ -1076,6 +1050,15 @@ class Player{
         let bounceOffset = Math.sin(angleInput) * intensity
         if (bounceOffset > 0) bounceOffset *= -1
         return (bounceOffset ) + this.damageRecoveryEffect
+    }
+    createHealthOverlays(){
+        const overlays = []
+        overlays.push(new GameObj("",0,0)) //blank first image
+        for (let i = 0; i < 4; i++){
+            const imgSrc = `./images/health/stage${i+1}.png`
+            overlays.push(new GameObj(imgSrc,1000,1000,undefined,GameObj.bottomY))
+        }
+        return overlays
     }
 }
 class PlayerState {
