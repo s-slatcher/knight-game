@@ -1,10 +1,11 @@
 /** @type {HTMLCanvasElement} */
 
 //normal settings for all is false
-const loadBlankSprites = false;
+const loadBlankSprites = true;
 const gameMuted = false;
-const disableEnemyDamage = false;
+const disableEnemyDamage = true;
 const showElementsAtAnyDistance = false;
+const stillMotion = true;
 
 
 const canvas = document.getElementById("canvas1");
@@ -32,9 +33,16 @@ const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
 const randomInt = (a,b) => Math.floor(randomValue(a,b+1))
 const round = (num,degree) => Math.floor(num*(Math.pow(10,degree))) / Math.pow(10,degree)
-const twoPointDistance = (coords1, coords2) => {
-    return Math.sqrt(Math.pow((coords2[0]-coords1[0]),2) + Math.pow((coords2[1]-coords1[1]),2))
+const square = (num) => Math.pow(num,2)
+
+const hypotenuse = (a,b) => Math.sqrt(square(a) + square(b)) 
+const pointDistance = (coords1, coords2) => {
+    if (!coords1[2] || !coords2[2]) coords1[2] = coords2[2] = 0
+    return Math.sqrt(square(coords2[0] - coords1[0]) 
+                    + square(coords2[1] - coords1[1]) 
+                    + square(coords2[2] - coords1[2]) )
 }
+
 
 
 
@@ -88,6 +96,7 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
+
 class InputHandler {
     constructor(){
     }
@@ -101,6 +110,8 @@ class InputHandler {
         if (keyRecord.includes('d')) input = 'right'
         if (keyRecord.includes('a') && keyRecord.includes('d')) input = 'middle'
         if (keyRecord.includes(' ')) input = 'attack'
+        if (keyRecord.includes('s')) input = 'down'
+        if (keyRecord.includes('w')) input = 'up'
         return input
     }
     readTouchInput(touchRecord){
@@ -251,7 +262,10 @@ class Initializing extends GameState {
             this.game.states.playing.handleBackground();
             this.game.activeObjects.forEach(e=>e.update())
         }
-        for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(400-(i*30),i*6-20))
+        //for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(0+(i*50),i*100))
+    }
+    exit(){
+        if (stillMotion) GameObj.scrollSpeed = 0;
     }
     update(input){ this.game.changeState("playing") }
     draw(ctx){ return }
@@ -270,13 +284,16 @@ class Playing extends GameState {
         this.gradient = this.ctx.createLinearGradient(0,0,0,200)
         this.gradient.addColorStop(1,"#b5dae5")
         this.gradient.addColorStop(0,"#0072b6")
+        document.onclick = e => { document.onclick = e => {this.testProjectile()} }
         
     }
     update(input){
+        
         if (!document.fullscreenElement) {
             this.game.changeState("paused")
             return
         }
+        
         this.game.totalFrames++;
         this.game.gameProgess += 1*this.game.speedModifier
         this.handleEnemies();
@@ -284,24 +301,32 @@ class Playing extends GameState {
         this.game.activeObjects.forEach((e)=>e.update())
         this.game.player.update(input)
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
-        this.game.activeObjects.sort((a,b)=> a.percentTraveled - b.percentTraveled)
+        this.game.activeObjects.sort((a,b)=> b.depth - a.depth)
         this.draw(this.ctx);   
         
     }
+    testProjectile(){
+
+        const projectiles = ["soccorBall","bowlingBall","bowlingBall"]
+        const int = randomInt(0,projectiles.length-1)
+        this.game.activeObjects.push(Projectile_test[projectiles[int]](this.game)) 
+    }
     handleEnemies(){
-        let startingY = 0.15 * GameObj.height + GameObj.topY
-        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingY);
+        return;
+        const startingDepth = 4200
+        if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingDepth);
         else this.framesSinceBowman += this.game.speedModifier;
-        if (this.game.health < 0.5) {
-            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.width/2,startingY))
+        if (this.game.player.health < 1) {
+            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.width/2,startingDepth))
         }
     }
-    spawnBowWave(startingY){
-        this.game.activeObjects.push(...Bowman.spawnWave(this.game,startingY,randomInt(2,3)))
+    spawnBowWave(startingDepth){ 
+        this.game.activeObjects.push(...Bowman.spawnWave(this.game,startingDepth,randomInt(2,3)))
         this.framesSinceBowman = 0
         this.bowmanDelay = 400
     }
     handleBackground(){
+        return;
         if (this.treesDelay <= 0) {
             Tree.spawnWave(this.game)
             this.treesDelay += Math.floor(40/this.game.speedModifier)
@@ -309,6 +334,7 @@ class Playing extends GameState {
         if (this.treesDelay === Math.floor(20/this.game.speedModifier)) this.createBush();
     }
     createBush(){
+        return;
         this.game.activeObjects.unshift(new Bush((this.width/2+randomValue(925,1025)*randomSign())))
         if (Math.abs(Bush.centerOffsetBias) > 1200) {
                 this.game.activeObjects[0].maxCenterOffset *= -1
@@ -378,6 +404,7 @@ class Game {
                         gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
+        this.forceHistory = []
 
     }
     update(timestamp, keyRecord, touchRecord){
@@ -407,7 +434,7 @@ class Game {
         let newSpeed = 1 + (Math.pow((this.stats.combo-1)/25, (2/3)))
         if (round(newSpeed,2) != this.speedModifier) {
             this.speedModifier = newSpeed
-            GameObj.scrollSpeed = 8*this.speedModifier;
+            GameObj.scrollSpeed = GameObj.minSpeed * this.speedModifier;
             this.setViewDistance(0.22 - ((1/16)*(newSpeed-1)))
         }
     }
@@ -428,8 +455,9 @@ class Game {
         GameObj.startY = GameObj.topY + (GameObj.height * GameObj.startPercentage)
     }
     changePerspectiveHeight(height){
+        console.log(GameObj.minSpeed, this.speedModifier, (height/GameObj.height))
         const heightDifference = GameObj.height-height
-        const newGameSpeed = 8 * this.speedModifier * (height/725)
+        const newGameSpeed = GameObj.minSpeed * this.speedModifier * (height/GameObj.height)
         const baseAdjustment = heightDifference/3
         const ratio = (baseAdjustment+GameObj.baseWidth) / GameObj.baseWidth
         this.activeObjects.forEach((e)=> { if (!(e instanceof SkyLayer)) e.maxCenterOffset *= ratio})
@@ -464,7 +492,7 @@ class StatsHandler {
         for (let i = 0; i < 6; i++) {
             const imgSrc = `./images/coin_pile/${i+1}.png`
             this.coinImages
-                .push(new GameObj(imgSrc,80,80,175,GameObj.bottomY,-1000+115))
+                .push(new GameObj(imgSrc,80,80,175,0,-1000+115))
         }
     }
     updateCoinImage(coins){
@@ -475,8 +503,19 @@ class StatsHandler {
 
 }
 
+class GameImage {
+    constructor(fileSrc, width, height, x, y){
+        this.image = new Image()
+        this.image.src = fileSrc
+        this.width = width
+        this.height = height
+        this.x = x
+        this.y = y
+    }
+}
+
 class GameObj {
-    static setPerspective(bottomY=canvas.height, perspectiveHeight=725, basesWidth=1000, startPercentage=0.22, scrollSpeed=8){
+    static setPerspective(bottomY=canvas.height, perspectiveHeight=725, basesWidth=1000, startPercentage=0.22, scrollSpeed = 8, minSpeed = 8){
         GameObj.baseWidth = basesWidth
         GameObj.baseCenterX = canvas.width/2
         GameObj.height = perspectiveHeight
@@ -484,6 +523,7 @@ class GameObj {
         GameObj.topY = GameObj.bottomY - GameObj.height
         GameObj.startPercentage = startPercentage 
         GameObj.startY = GameObj.topY + (GameObj.height * GameObj.startPercentage)
+        GameObj.minSpeed = minSpeed
         GameObj.scrollSpeed = scrollSpeed
     }
     static drawRoad(ctx){
@@ -504,31 +544,29 @@ class GameObj {
         ctx.fill();
     }
     constructor(fileSrc, maxWidth, maxHeight, 
-        posXAtBase=GameObj.baseCenterX, startingY=GameObj.startY, heightOffset = 0){
+        posXAtBase=GameObj.baseCenterX, depth, heightOffset = 0){
         this.image = new Image()
         this.image.src = fileSrc
-        this.sx = 0
-        this.sy = 0
-        this.percentTraveled = ((startingY)-GameObj.topY) / GameObj.height 
+        this.depth = depth
+        this.projectedDistanceFromBottom = (this.depth * GameObj.height) / (this.depth + GameObj.height)
+        this.perspectiveScale = 1 - (this.projectedDistanceFromBottom / GameObj.height)
         this.posXAtBase = posXAtBase
         this.relativeSpeed = 0
-        this.maxWidth = maxWidth
+        this.maxWidth = maxWidth        //refactor: this becomes .image.width
         this.maxHeight = maxHeight
-        this.maxHeightOffset = heightOffset
-        this.maxCenterOffset = (posXAtBase - GameObj.baseCenterX)
-        this.dw = this.maxWidth * this.percentTraveled  
-        this.dh = this.maxHeight * this.percentTraveled   
+        this.maxHeightOffset = heightOffset  //refactor: comes from new image class, just canvas height - y  
+        this.maxCenterOffset = (posXAtBase - GameObj.baseCenterX)  //also comes from image coordinates 
+        this.dw = this.maxWidth * this.perspectiveScale
+        this.dh = this.maxHeight * this.perspectiveScale
         this.dx = GameObj.baseCenterX - this.dw/2
-        this.dy = startingY - this.dh 
-        this.heightTraveled = 0;
+        this.dy = GameObj.bottomY - this.projectedDistanceFromBottom - this.dh
         this.angle = 0
         this.alpha = 1
         this.flipped = false;
-        this.distanceFromBase = GameObj.bottomY - startingY
         this.markedForDel = false;    
     }
-    get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.percentTraveled)}   
-    get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.percentTraveled)}
+    get centerX(){return this.dx+this.dw/2 + (this.maxCenterOffset * this.perspectiveScale)}   
+    get centerY(){return this.dy+this.dh/2 + (this.maxHeightOffset * this.perspectiveScale)}
     get imageBaseY(){return this.dy+this.dh}
     get lane(){
             if (this.maxCenterOffset < -50) return "left"
@@ -537,25 +575,25 @@ class GameObj {
         }
     
     moveWithPerspective(){
-        const speed = (GameObj.scrollSpeed + this.relativeSpeed) * Math.pow(this.percentTraveled,2)
-        const distanceFromBase = (1-this.percentTraveled)*GameObj.height - speed
-        this.dw = (this.percentTraveled * this.maxWidth)
-        this.dh = (this.percentTraveled * this.maxHeight)
-        this.dy = (GameObj.bottomY - distanceFromBase) - this.dh
-        this.dx = (GameObj.baseCenterX - this.dw/2)
-        this.percentTraveled = ((this.imageBaseY)-GameObj.topY) / GameObj.height
+        this.depth -= GameObj.scrollSpeed + this.relativeSpeed
+        this.projectedDistanceFromBottom = (this.depth * GameObj.height) / (this.depth + GameObj.height)
+        this.dw = this.perspectiveScale * this.maxWidth
+        this.dh = this.perspectiveScale * this.maxHeight
+        this.dy = GameObj.bottomY - this.projectedDistanceFromBottom - this.dh
+        this.dx = GameObj.baseCenterX - (this.dw/2)
+        this.perspectiveScale = 1 - (this.projectedDistanceFromBottom / GameObj.height)
     }
     draw(ctx){        
         if (this.imageBaseY < GameObj.startY && !showElementsAtAnyDistance) return;
         if (this.alpha === 0) return;
         const {image, dx, dy, dw, dh} = this;
-        const heightOffset = this.maxHeightOffset * this.percentTraveled 
-        const centerOffset = this.maxCenterOffset * this.percentTraveled
+        const heightOffset = this.maxHeightOffset * this.perspectiveScale 
+        const centerOffset = this.maxCenterOffset * this.perspectiveScale
         if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.save() //ugly fix for not save/restoring more than needed
         if (this.flipped) this.flipHorizontal(ctx);  
         this.rotate(ctx)
         ctx.globalAlpha = this.alpha
-        ctx.drawImage(image, (dx + centerOffset), dy + heightOffset, (dw), (dh))
+        ctx.drawImage(image, (dx + centerOffset), (dy + heightOffset), (dw), (dh))
         if (this.angle != 0 || this.alpha != 1 || this.flipped) ctx.restore();
     }
     drawShadow(ctx, shadowImg, widthMultiplier){
@@ -589,20 +627,21 @@ class GameObj {
         newImage.onload = () => this.image = newImage
         newImage.src = imageSrc
     }
+    depthFromProjectedDistance(num){
+        return num / (1-(num/GameObj.height))
+    }
 }
 GameObj.setPerspective();
-
-
 
 class GroundedObjects extends GameObj {
     static activeObjects = []
     constructor(fileSrc, maxWidth, maxHeight, posXAtBase, heightOffset){
-            const spawningY = 0.15 * GameObj.height + GameObj.topY
-            super(fileSrc, maxWidth, maxHeight, posXAtBase, spawningY, heightOffset)
+            const depth = 4200
+            super(fileSrc, maxWidth, maxHeight, posXAtBase, depth, heightOffset)
         }
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.15) this.markedForDel = true;
+        //if (this.depth < 50) this.markedForDel = true;
     }
 }
 
@@ -623,7 +662,7 @@ class Tree extends GroundedObjects {
         this.shadowWidthMultiplier = randomValue(0.85,1)
     }
     update(){
-        if(this.percentTraveled > 0.7) this.fadeAlpha(-0.2)
+        if(this.depth < 100) this.fadeAlpha(-0.2)
         super.update()
     }
     drawShadow(ctx){
@@ -644,17 +683,19 @@ class Bush extends GroundedObjects {
 }
 
 class SkyLayer extends GameObj{
-    constructor(startOffset, endOffset){
-        super("./images/sky_layers/skylayer3.png",2500,2500,500,GameObj.bottomY-startOffset,0) //./images/skylayer3.png
+    constructor(startDepth, endOffset){
+        super("./images/sky_layers/skylayer3.png",2500,2500,500,startDepth,0)
         this.endOffset = endOffset
         this.alpha = showElementsAtAnyDistance ? 0 : 1
     }
-    get endPoint(){return GameObj.startY + this.endOffset}
+    get destinationDepth(){
+        return this.depthFromProjectedDistance(GameObj.bottomY - GameObj.startY) - this.endOffset
+    }
     
     update(){
-        let difference = (this.endPoint - this.imageBaseY)
-        if (Math.abs(difference) < 1) return 
-        this.relativeSpeed = difference*0.5
+        let difference = (this.destinationDepth - this.depth)
+        if (Math.abs(difference) < 10) return 
+        this.relativeSpeed = -difference*0.05
         this.moveWithPerspective()
     }
     drawShadow(){}
@@ -663,7 +704,7 @@ class SkyLayer extends GameObj{
 
 class Sprite extends GameObj{
     constructor(bitmaps, maxWidth, maxHeight, heightOffset){
-        super(undefined,  maxWidth, maxHeight, GameObj.baseCenterX, GameObj.bottomY, heightOffset)
+        super(undefined,  maxWidth, maxHeight, GameObj.baseCenterX, 0, heightOffset)
         this.frames = bitmaps
         this.frame = 0;
         this.image = this.frames[this.frame]
@@ -680,10 +721,105 @@ class Sprite extends GameObj{
     }
 }
 
+class Projectile_test extends GameObj {
+    static soccorBall(game){
+        const ball = new Projectile_test(game,`./images/football.png`,100,100,500,0,-600,1)
+        ball.velocity = {x:randomInt(-10,10), y:randomInt(0,1) === 0 ? -30 : 0,z:15}
+        ball.groundFriction *= 0.05
+        ball.bounceDampening *= 0.5 
+        return ball
+    }
+    static bowlingBall(game) {
+        const ball = new Projectile_test(game,`./images/bowlingball.png`,125,125,500,0,0)
+        ball.velocity = {y:randomInt(0,1) === 0 ? -40 : 0, x:randomInt(-10,10), z:0}
+        ball.velocity.z = ball.velocity.y < 0 ? 15 : 40
+        ball.groundFriction *= 0.05
+        ball.bounceDampening = 0.9
+        return ball
+    }
+    static moveableSquare(game,depth){
+        const square = new Projectile_test(game,`./images/test_square.png`,200,200,500,depth)
+        square.alpha = 0
+        square.bounceDampening = 0.8
+        square.frameLifeSpan = undefined
+        return square;
+    }
+    constructor(game,fileSrc, maxHeight, maxWidth, posXAtBase, depth, heightOffset){
+        super(fileSrc, maxHeight, maxWidth, posXAtBase, depth, heightOffset)
+        this.game = game;
+        this.velocity = {x:0,y:0,z:0}
+        this.force = {x:0,y:2.5,z:0} //2.5 default to represent gravity
+        this.borders = {x:[-750,750],y:[undefined,0], z:[-100,2100]} //[lowerlimit, upper limit]
+        //this.angle = 0
+        //this.rotationSpeed = 0
+        this.mass = 1
+        this.airFriction = 0.005
+        this.groundFriction = 0.1
+        this.bounceDampening = 0.5  // max 1 (negative value needed for infnite bouncing) 
+        this.framesActive = 0
+        this.frameLifeSpan = 400
+        this.shadow = new Image()
+        this.shadow.src = "./images/shadow_small.png"
+        this.relativeSpeed = 0
+    }
+    update(){
+        //reset the new position values to the current position
+        this.newPos = {
+            x: this.maxCenterOffset,
+            y: this.maxHeightOffset,
+            z: this.depth
+        }
+
+        const {velocity, newPos, borders, force} = this
+        const onGround = this.newPos.y >= this.borders.y[1] && velocity.y === 0
+        const deceleration = onGround ? this.groundFriction * this.mass : this.airFriction / this.mass
+        
+        for (const axis in velocity) {
+            velocity[axis] *= 1-deceleration
+            velocity[axis] += force[axis]
+            newPos[axis] += velocity[axis] 
+            borders[axis].forEach((border,index) => {
+                const side = index === 0 ? -1 : 1  //used to reverse inequalities when border is left (index 0)
+                if (newPos[axis] - velocity[axis] === border  //true if obj was touching border before 
+                    && side * (newPos[axis]) > side * border){
+                        newPos[axis] -= velocity[axis]
+                        velocity[axis] = 0
+                    }
+                if (side * newPos[axis] > side * border) {
+                    this.collision(axis,index)
+                }
+            })
+        } 
+        this.maxCenterOffset = newPos.x
+        this.maxHeightOffset = newPos.y
+        this.depth = newPos.z
+        this.moveWithPerspective();
+        this.framesActive += 1
+        if (this.framesActive > this.frameLifeSpan) this.markedForDel = true;
+    }
+    collision(axis,borderIndex){
+        const {velocity, newPos, borders, force} = this
+        const distanceCovered = Math.abs(velocity[axis])
+        const overshootDistance = (Math.abs(newPos[axis])-Math.abs(borders[axis][borderIndex]))
+        const velocityCorrection = force[axis] * ( (distanceCovered-overshootDistance) / distanceCovered )
+        newPos[axis] = borders[axis][borderIndex]
+        velocity[axis] -= force[axis] - velocityCorrection
+        velocity[axis] *= -1
+        const velMagnitude = Math.abs(velocity[axis])
+        let decreaser = Math.pow(velMagnitude,this.bounceDampening) - (1-this.bounceDampening)
+        if (decreaser < velMagnitude) velocity[axis] -= decreaser * Math.sign(velocity[axis])
+        else velocity[axis] = 0
+        console.log("bounced")
+    }
+    drawShadow(ctx){
+        //super.drawShadow(ctx,this.shadow,1.1)
+    }
+}
+
+
 class Projectile extends GameObj {
-    static activeProjectiles = [];
-    constructor(fileSrc, maxHeight, maxWidth, posXAtBase, startingY, heightOffset, velTotal=0, velX=0, initialAngle=0, rotationSpeed=0){
-        super(fileSrc, maxHeight, maxWidth, posXAtBase, startingY, heightOffset)
+    constructor(fileSrc, maxHeight, maxWidth, posXAtBase, depth, heightOffset, velTotal=0, velX=0, initialAngle=0, rotationSpeed=0){
+        super(fileSrc, maxHeight, maxWidth, posXAtBase, depth, heightOffset)
         this.velTotal = velTotal
         this.velX = velX
         this.velY = Math.sqrt(Math.pow(this.velTotal, 2) - Math.pow(this.velX, 2)) || 0
@@ -703,7 +839,7 @@ class Projectile extends GameObj {
 class BlockedArrow extends Projectile {
     constructor(posX,heightOffset,velTotal,velX){
         super('./images/arrow.png',
-            40*0.5, 150*0.5, posX, GameObj.bottomY, heightOffset, velTotal, 
+            40*0.5, 150*0.5, posX, 0, heightOffset, velTotal, 
             velX, 3.14*Math.sign(velX), randomValue(0.001,0.005)*velX)
         this.gravity = 3
         this.alpha = 1
@@ -718,8 +854,8 @@ class BlockedArrow extends Projectile {
 }
 
 class FiredArrow extends Projectile {
-    constructor(posXAtBase, startingY, heightOffset, game){
-        super('./images/fired_arrow.png', 50, 100, posXAtBase, startingY+10, heightOffset,0, 
+    constructor(posXAtBase, depth, heightOffset, game){
+        super('./images/fired_arrow.png', 50, 100, posXAtBase, depth+10, heightOffset,0, 
             -40*Math.sign(posXAtBase - GameObj.baseCenterX),0.25*Math.sign(posXAtBase - GameObj.baseCenterX))
         this.gravity = 0;
         this.velY = 1
@@ -733,7 +869,7 @@ class FiredArrow extends Projectile {
         this.checkForCollison();
     }
     checkForCollison(){
-        if (this.percentTraveled < 0.8) return;
+        if (this.depth > 100) return;
         this.markedForDel = true;
         if (this.player.lane === this.lane &&
             this.player.state === this.player.states["blocking"]){
@@ -747,8 +883,8 @@ class FiredArrow extends Projectile {
 }
 
 class DroppedBow extends Projectile {
-    constructor(posXAtBase, startingY, heightOffset, flipped){
-        super('./images/crossbow.png', 250*0.8, 141*0.8, posXAtBase, startingY, heightOffset, 10, 0)
+    constructor(posXAtBase, depth, heightOffset, flipped){
+        super('./images/crossbow.png', 250*0.8, 141*0.8, posXAtBase, depth, heightOffset, 10, 0)
         this.flipped = flipped
     }
     update(){
@@ -759,16 +895,16 @@ class DroppedBow extends Projectile {
             this.velX = 0;
         }
         this.fadeAlpha(-0.01)
-        if (this.percentTraveled > 1.1) this.markedForDel = true
+        if (this.depth < 0) this.markedForDel = true
     }
 }
 
 
 
 class Spurt extends Projectile {
-    constructor(posXAtBase, startingY, heightOffset){
+    constructor(posXAtBase, depth, heightOffset){
         super (undefined,
-            40, 40, posXAtBase+randomInt(-25,25), startingY, 
+            40, 40, posXAtBase+randomInt(-25,25), depth, 
             heightOffset+randomInt(-25,25), 
             randomValue(3,15), 
             randomValue(-4,4), 0, 0)
@@ -787,8 +923,8 @@ class Spurt extends Projectile {
 }
 
 class BloodSpurt extends Spurt {
-    constructor(posXAtBase, startingY, heightOffset){
-        super (posXAtBase, startingY, heightOffset)
+    constructor(posXAtBase, depth, heightOffset){
+        super (posXAtBase, depth, heightOffset)
         this.image.src = `./images/blood/${randomInt(1,2)}.png`
         this.relativeSpeed = this.velTotal/3
         this.gravity = 0.8;
@@ -796,8 +932,8 @@ class BloodSpurt extends Spurt {
 }
 
 class TurkeyMush extends Spurt {
-    constructor(posXAtBase, startingY, heightOffset){
-        super (posXAtBase, startingY, heightOffset)
+    constructor(posXAtBase, depth, heightOffset){
+        super (posXAtBase, depth, heightOffset)
         this.image.src = `./images/turkey_bits/${randomInt(1,2)}.png`
         this.relativeSpeed = -this.velTotal
         this.gravity = 1;
@@ -811,16 +947,18 @@ class Coin extends Projectile{
         this.game = game
         this.targetX = targetX + randomValue(-80,80)
         this.targetY = targetY
-        this.velY = (y - this.targetY)/ 100  
+        this.velY = (this.imageBaseY - this.targetY)/ 100  
         this.velX = (this.targetX - x)/ 100
         this.XYratio = Math.abs(this.velX / this.velY)
         this.acceleration = randomValue(1.03,1.035)
         this.rotationSpeed = randomValue(-0.02,0.02)//this.acceleration-1.02
         this.gravity = 0
         this.setSfx()
+        this.relativeSpeed = -GameObj.scrollSpeed + (this.depth/8)/48
     }
     update(){
         super.update();
+        this.moveWithPerspective()
         this.velY *= this.acceleration
         this.velX *= this.acceleration
         if (this.centerY-this.targetY < 100) this.fadeAlpha(-0.25)
@@ -851,12 +989,9 @@ class SoundEffect {
 }
 
 class Enemy extends GameObj {
-    static checkProximity(posY){
-
-    }
     static enemies = []
-    constructor(game, baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY){
-        super(baseImageSrc, maxWidth, maxHeight, posXAtBase, startingY)
+    constructor(game, baseImageSrc, maxWidth, maxHeight, posXAtBase, depth){
+        super(baseImageSrc, maxWidth, maxHeight, posXAtBase, depth)
         this.game = game
         this.sfx = {}
         this.shadow = new Image()
@@ -864,13 +999,12 @@ class Enemy extends GameObj {
         Enemy.enemies.push(this)
     }
     spawnCoins(num){
-        const {posXAtBase,imageBaseY,maxHeight} = this
+        const {posXAtBase,depth,maxHeight} = this
         const target = this.game.statsHandler.coinImages[1]
         const targetX = target.centerX
         const targetY = 1000+target.maxHeightOffset
-        console.log(targetX,targetY)
         for (let i = 0; i < num; i++) {
-            const coin = new Coin(posXAtBase,imageBaseY+40,-maxHeight/2,targetX,targetY, this.game)
+            const coin = new Coin(posXAtBase,depth,-maxHeight/2,targetX,targetY, this.game)
             this.game.activeObjects.push(coin)
         } 
     }
@@ -880,43 +1014,42 @@ class Enemy extends GameObj {
 }
 
 class Bowman extends Enemy {
-    static spawnWave(game, spawningY, waveSize=3){
+    static spawnWave(game, spawnDepth, waveSize=3){
         let posXAtBase = 500 * randomSign() + game.width/2
-        const wave = [new Bowman(game,posXAtBase,spawningY)]
+        const wave = [new Bowman(game,posXAtBase,spawnDepth)]
         for (let i = 1; i < waveSize; i++) {
             posXAtBase = 500 * randomSign() + game.width/2
             let buffer = randomInt(300,400)
             if (posXAtBase !== wave[i-1].posXAtBase) buffer += 200
-            let bufferedStartingY = wave[i-1].imageBaseY - (buffer * Math.pow(wave[i-1].percentTraveled,2))
-            wave.push(new Bowman(game,posXAtBase,bufferedStartingY))
+            let bufferedStartingDepth = wave[i-1].depth - buffer
+            wave.push(new Bowman(game,posXAtBase,bufferedStartingDepth))
+            Enemy.enemies.push(wave[i])
         }
-        Enemy.enemies.push(...wave)
         return wave;
     }
-    constructor(game, posXAtBase, spawningY){
-        super(game, './images/bowman/unloaded.png', 321*0.8, 604*0.8, posXAtBase, spawningY)
+    constructor(game, posXAtBase, depth){
+        super(game, './images/bowman/unloaded.png', 321*0.8, 604*0.8, posXAtBase, depth)
         this.alpha = 0;
         this.flipped = this.lane === "right" ? true : false
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
-        this.bowLoadDistance = 0.27   
+        this.bowLoadDistance = 2000  
         this.sfx.load = new SoundEffect (`./sounds/crossbow_loading/1.mp3`,0.1)
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
         this.deathCounter = 0;
     }
-    
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.2) this.markedForDel = true;
+        if (this.depth < -150) this.markedForDel = true;
         if (this.state === this.states.dead) {
             this.deathCounter += 1
             if (this.deathCounter > 30) this.fadeAlpha(-0.1)
         } else {
             this.fadeAlpha(0.25)
         }
-        if (this.percentTraveled > this.bowLoadDistance && this.state === "unloaded") this.loadBow()
+        if (this.depth < this.bowLoadDistance && this.state === "unloaded") this.loadBow()
         if (this.state === "loaded" && this.game.totalFrames > this.attackingFrame) this.attack();
     }
     loadBow(){
@@ -925,11 +1058,11 @@ class Bowman extends Enemy {
         this.swapImage('./images/bowman/loaded.png')   
         this.sfx.load.play();
     }
-    attack(){    
+    attack(){
         this.state = "fired"
         this.swapImage('./images/bowman/unloaded.png')
-        const {posXAtBase,imageBaseY,maxHeight} = this
-        this.game.activeObjects.push(new FiredArrow(posXAtBase,imageBaseY,-maxHeight/2, this.game))
+        const {posXAtBase,depth,maxHeight} = this
+        this.game.activeObjects.push(new FiredArrow(posXAtBase,depth,-maxHeight/2, this.game))
         
     }
     receiveAttack(){
@@ -938,10 +1071,10 @@ class Bowman extends Enemy {
         this.swapImage('./images/bowman/dead.png')
         this.sfx.death.play();
         this.sfx.death2.play();
-        const {posXAtBase,imageBaseY,maxHeight, flipped} = this
-        this.game.activeObjects.push(new DroppedBow(posXAtBase, imageBaseY+10, -maxHeight/2, flipped))
+        const {posXAtBase,depth,maxHeight, flipped} = this
+        this.game.activeObjects.push(new DroppedBow(posXAtBase, depth, -maxHeight/2, flipped))
         for (let index = 0; index < 30; index++) {
-            this.game.activeObjects.push(new BloodSpurt(posXAtBase, imageBaseY+10, -maxHeight/2))   
+            this.game.activeObjects.push(new BloodSpurt(posXAtBase, depth, -maxHeight/2))   
         }
         this.spawnCoins(5)
         this.game.addScore(10)
@@ -959,25 +1092,24 @@ class Turkey extends Enemy {
         Turkey.bufferFrames -= 1
         return false;
     }
-    constructor(game, posXAtBase, spawningY){
-        super(game, './images/turkey.png', 384*0.9, 206*0.9, posXAtBase, spawningY)
+    constructor(game, posXAtBase, depth){
+        super(game, './images/turkey.png', 384*0.9, 206*0.9, posXAtBase, depth)
         this.sfx.death = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
         Turkey.bufferFrames += randomInt(1000,1800) / this.game.speedModifier
     }
     update(){
         this.moveWithPerspective()
-        if (this.percentTraveled > 1.2) {
+        if (this.depth < 0) {
             this.markedForDel = true;
-
         }
     }
     receiveAttack(){
         this.markedForDel = true;
         this.game.health += 0.5
         this.sfx.death.play()
-        const {posXAtBase,imageBaseY,maxHeight} = this
+        const {posXAtBase,depth,maxHeight} = this
         for (let i = 0; i < 50; i++) {
-           this.game.activeObjects.push(new TurkeyMush(posXAtBase, imageBaseY+10, -maxHeight/2)) 
+           this.game.activeObjects.push(new TurkeyMush(posXAtBase, depth, -maxHeight/2)) 
         }
     }
 }
@@ -1008,7 +1140,7 @@ class Player {
     update(input){
         this.state.update(input);
         this.angleCounter += 1/15 * this.game.speedModifier
-        this.applyBounce()
+        if(!stillMotion) this.applyBounce()
     }
     draw(ctx){
         this.state.draw(ctx)
@@ -1029,18 +1161,16 @@ class Player {
         this.changeState("blocking")  //change this to make it less punishing to get hit right after hitting attack?
     }
     updateHealth(dmg){
-        console.log("damage taken: ",dmg)
         this.health += dmg
         let healthOverlayIndex = Math.ceil(5-(this.health*5))
         if (healthOverlayIndex < 0) healthOverlayIndex = 0
         if (healthOverlayIndex > 4) healthOverlayIndex = 4
         this.healthOverlayIndex = healthOverlayIndex 
-        console.log(this.healthOverlayIndex)
     }
-    applyBounce(){
+    applyBounce(){    // look at fixing the damageRecoveryEffect, give it an ease in and out (check for diffence in damageBounceMod and damageRecovery Effect)
         let damageBounceMod = 1;
         if (this.damageRecoveryEffect > 1) {
-            this.damageRecoveryEffect -=  2 * (this.damageRecoveryEffect/20)
+            this.damageRecoveryEffect -=  2 * (this.damageRecoveryEffect/20)    
             damageBounceMod *= (1/this.damageRecoveryEffect)
         } else this.damageRecoveryEffect = 0 //delete?
         this.block.maxHeightOffset = 0 + this.getBounceMod(20 * damageBounceMod, this.angleCounter+0.25)
@@ -1056,7 +1186,7 @@ class Player {
         overlays.push(new GameObj("",0,0)) //blank first image
         for (let i = 0; i < 4; i++){
             const imgSrc = `./images/health/stage${i+1}.png`
-            overlays.push(new GameObj(imgSrc,1000,1000,undefined,GameObj.bottomY))
+            overlays.push(new GameObj(imgSrc,1000,1000,undefined,0))
         }
         return overlays
     }
@@ -1168,8 +1298,8 @@ class Attacking extends PlayerState {
         const activeObj = this.game.activeObjects
         for (let i = activeObj.length-1; i >= 0; i--) {
             if (activeObj[i] instanceof Enemy){
-                let inRange = activeObj[i].percentTraveled > 0.63
-                            && activeObj[i].percentTraveled < (activeObj[i].lane === "middle" ? 1.1 : 0.9)  
+                let inRange = activeObj[i].depth < 400 
+                            && activeObj[i].depth > (activeObj[i].lane === "middle" ? -100 : 100)  
                             && activeObj[i].lane === this.player.lane
                 if (inRange) activeObj[i].receiveAttack();
             } 

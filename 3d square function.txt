@@ -1,0 +1,72 @@
+moveTestSquare(input){
+        const sqr1 = this.moveableSquare1
+        const sqr2 = this.moveableSquare2
+        const force = sqr2.force
+        force.x *= 0.7
+        force.y = 2.5
+        force.z *= 0.7
+        switch(input){
+            case 'up':
+                force.z = 2
+                break;
+            case 'down':
+                force.z = -2
+                break;
+            case 'right':
+                force.x = 2
+                break;
+            case 'left':
+                force.x = -2
+                break;
+            case 'attack':
+                force.y = -2
+        }
+        this.forceHistory.push({x:force.x,y:force.y,z:force.z})
+
+        const length = this.forceHistory.length
+        if (length > 10) this.moveableSquare1.force = this.forceHistory[length-10]
+        if (sqr1.depth-sqr2.depth < 0) sqr1.depth = sqr2.depth-400
+        
+    }
+
+
+
+    this.moveableSquare1 = Projectile_test.moveableSquare(this,400)
+        this.moveableSquare2 = Projectile_test.moveableSquare(this,100)
+        this.activeObjects.push(this.moveableSquare1)
+        this.activeObjects.push(this.moveableSquare2)
+
+
+drawTestSquare(ctx){
+        const coords = []
+        
+        ctx.beginPath()
+        for (let i = 0; i < 2; i++) {
+            const square = this[`moveableSquare${i+1}`]
+            const scale = square.perspectiveScale
+            const offset = [square.maxCenterOffset * scale, square.maxHeightOffset * scale]
+
+            const coords1 = [square.dx + offset[0], square.dy + offset[1]]
+            const coords2 = [coords1[0] + square.dw, coords1[1]]
+            const coords3 = [coords2[0], coords2[1] +  square.dh]
+            const coords4 = [coords1[0], coords3[1]]
+            
+            coords.push(coords1,coords2,coords3,coords4)
+            
+            ctx.moveTo(coords[0+(i*4)][0],coords[0+(i*4)][1])
+            ctx.lineTo(coords[1+(i*4)][0],coords[1+(i*4)][1])
+            ctx.lineTo(coords[2+(i*4)][0],coords[2+(i*4)][1])
+            ctx.lineTo(coords[3+(i*4)][0],coords[3+(i*4)][1])
+            ctx.lineTo(coords[0+(i*4)][0],coords[0+(i*4)][1])
+        }
+        for (let i = 0; i < 4; i++) {
+            ctx.moveTo(coords[i+4][0],coords[i+4][1])
+            ctx.lineTo(coords[i][0],coords[i][1])
+        }
+        const centerCoords = [(this.moveableSquare1.centerX + this.moveableSquare2.centerX)/2,
+                               (this.moveableSquare1.centerY + this.moveableSquare2.centerY)/2 ]
+        
+        ctx.closePath()
+        ctx.lineWidth = 6 * this.moveableSquare1.perspectiveScale
+        ctx.stroke()
+    }
