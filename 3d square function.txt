@@ -19,7 +19,7 @@ moveTestSquare(input){
                 force.x = -2
                 break;
             case 'attack':
-                force.y = -2
+                force.y = 2
         }
         this.forceHistory.push({x:force.x,y:force.y,z:force.z})
 
