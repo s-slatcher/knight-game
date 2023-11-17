@@ -1,9 +1,9 @@
 /** @type {HTMLCanvasElement} */
 
 //normal settings for all is false
-const loadBlankSprites = true;
+const loadBlankSprites = false;
 const gameMuted = false;
-const disableEnemyDamage = true;
+const disableEnemyDamage = false;
 const showElementsAtAnyDistance = false;
 const stillMotion = false;
 
@@ -35,18 +35,21 @@ const randomInt = (a,b) => Math.floor(randomValue(a,b+1))
 const round = (num,degree) => Math.floor(num*(Math.pow(10,degree))) / Math.pow(10,degree)
 const square = (num) => Math.pow(num,2)
 
-const vectorMagnitude = (x, y, z = 0) => Math.sqrt(square(x) + square(y) + square(z)) 
-
-const unitVector = (x, y, z = 0) => {
-    const magntitude = vectorMagnitude(x,y,z)
-    return {x:x/magntitude, y: y/magntitude, z: z/magntitude}
+const vectorMagnitude = (vector) => {
+    const {x,y,z = 0} = vector
+    return Math.sqrt(square(x) + square(y) + square(z))
+} 
+const unitVector = (vector) => {
+    const magntitude = vectorMagnitude(vector)
+    const {x,y,z} = vector
+    return {x: x/magntitude, y: y/magntitude, z: z/magntitude}
 }
-
-const pointDistance = (coords1, coords2) => {
-    if (!coords1[2] || !coords2[2]) coords1[2] = coords2[2] = 0
-    return Math.sqrt(square(coords2[0] - coords1[0]) 
-                    + square(coords2[1] - coords1[1]) 
-                    + square(coords2[2] - coords1[2]) )
+const vectorFromPoints = (vector1,vector2) => {
+    return {x: vector2.x-vector1.x, y: vector2.y-vector1.y, z: vector2.z-vector1.z}
+}
+const changeVectorLength = (vector, length) => {
+    const unit = unitVector(vector)
+    return {x: unit.x*length, y: unit.y*length, z: unit.z*length}
 }
 
 
@@ -257,9 +260,47 @@ class GameState {
 class Paused extends GameState {
     constructor(game){
         super(game)
+        document.addEventListener("mousedown", (event) => this.debugFunction(event))
     }
-    enter(){ document.getElementById("resume-btn").classList.remove("disabled")}
-    update(input){ if (document.fullscreenElement) this.game.changeState("playing") }
+    enter(){ 
+        document.getElementById("resume-btn").classList.remove("disabled")
+    }
+    exit(){
+    }
+    update(input){ if (document.fullscreenElement) this.game.changeState("playing") } //fix this to have game start rules not based on fullscreen
+
+    debugFunction(event){
+        if (this.game.state != this) return;
+        const pointInRectangle = function(x,y,w,h,x2,y2){
+            if (x2 > x && x2 < x+w && y2 > y && y2 < y+h) return true
+            else return false
+        }
+        function getMousePosition(event) { 
+            let rect = canvas.getBoundingClientRect(); 
+            let x = (event.clientX - rect.left) * (1000/ rect.width); 
+            let y = (event.clientY - rect.top) * (1000/ rect.width); 
+            return [x,y]
+        } 
+        const clickCoords = getMousePosition(event) 
+        let endCycle = false
+        this.game.activeObjects.filter(e=>{
+            return (e instanceof Bush
+                    || e instanceof Enemy
+                    || e instanceof Projectile_test)
+        }).toReversed().forEach( e => {
+            if (endCycle) return;
+            const color = "#" + ((1 << 24) * Math.random() | 0).toString(16).padStart(6, "0")
+            if (pointInRectangle(
+                e.dx, e.dy, e.dw, e.dh, clickCoords[0], clickCoords[1]
+            )){
+                endCycle = true
+                e.drawOutline(ctx, color)
+                console.log(`%c ${e.constructor.name}`, `color: ${color}; font-size: 30`, e)
+            }
+           
+        })
+        
+    }
 }
 class Initializing extends GameState {
     constructor(game){
@@ -290,7 +331,7 @@ class Playing extends GameState {
         this.shadowCanvas.width = this.width
         this.shadowCanvas.height = this.height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
-        document.onclick = e => { document.onclick = e => {this.testProjectile()} }
+        //document.onclick = e => { document.onclick = e => {this.testProjectile()} }
     }
     update(input){
         if (!document.fullscreenElement) {
@@ -311,7 +352,7 @@ class Playing extends GameState {
     }
     testProjectile(){
 
-        const projectiles = ["soccorBall","bowlingBall","bowlingBall"]
+        const projectiles = ["soccorBall","bowlingBall"]
         const int = randomInt(0,projectiles.length-1)
         this.game.activeObjects.push(Projectile_test[projectiles[int]](this.game)) 
     }
@@ -319,8 +360,8 @@ class Playing extends GameState {
         const startingDepth = 4200
         if (this.framesSinceBowman > this.bowmanDelay) this.spawnBowWave(startingDepth);
         else this.framesSinceBowman += this.game.speedModifier;
-        if (this.game.player.health < 1) {
-            //if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,this.width/2,startingDepth))
+        if (this.game.player.health < 0.5) {
+            if(Turkey.turkeySpawnable()) this.game.activeObjects.push(new Turkey(this.game,{x: 0, y: 0, z: 4000}))
         }
     }
     spawnBowWave(startingDepth){ 
@@ -393,7 +434,7 @@ class Game {
         this.speedModifier = 1;
         this.health = 1 //move this into the player class (will need to fix my stats class first)
         this.activeObjects = []
-        this.stats = {score:0, coins: 500, combo: 1}
+        this.stats = {score:0, coins: 0, combo: 1}
         this.player = new Player(this, bitmaps.block, bitmaps.attack)
         this.statsHandler = new StatsHandler(this)
         this.inputHandler = new InputHandler()
@@ -513,15 +554,15 @@ class GameImage {
     }
     draw(ctx, x = this.x, y = this.y, width = this.width, height = this.height){
         const {alpha,angle,flipped} = this
-        if (alpha === 0) return;
         if (alpha < 1 || angle !== 0 || flipped) {
             ctx.save()
             this.rotate(ctx,x+width/2,y+height/2)
             this.flipHorizontal(ctx,x+width/2,0)
             ctx.globalAlpha = this.alpha
         }
-        ctx.drawImage(this.image, x, y, width, height)
+        if (alpha !== 0 && this.image) ctx.drawImage(this.image, x, y, width, height)
         ctx.restore()
+
     }
     fadeAlpha(increment){
         let alpha = this.alpha + increment
@@ -572,12 +613,12 @@ class GameObj {
         ctx.fillStyle = "#cfbd86"
         ctx.fill();
     }
-    constructor(game, gameImage, [x,y,z]){
+    constructor(game, gameImage, basePoint){
         this.game = game
         this.image = gameImage
-        this.x = x
-        this.y = y 
-        this.z = z 
+        this.x = basePoint.x
+        this.y = basePoint.y 
+        this.z = basePoint.z 
         this.projectedHeight = (this.z * GameObj.height) / (this.z + GameObj.height)
         this.perspectiveScale = 1 - (this.projectedHeight / GameObj.height)
         this.relativeSpeed = 0
@@ -623,6 +664,14 @@ class GameObj {
     depthFromProjectedDistance(num){
         return num / (1-(num/GameObj.height))
     }
+    drawOutline(ctx,color){
+        if (this instanceof Tree) return;
+        ctx.save()
+        ctx.strokeStyle = color
+        ctx.lineWidth = 10 * this.perspectiveScale
+        ctx.strokeRect(this.dx,this.dy,this.dw,this.dh)
+        ctx.restore()
+    }
 }
 GameObj.setPerspective();
 
@@ -654,7 +703,7 @@ class Tree extends GroundedObjects {
         const size = {width: 1060 * scaler, height: 1090 * scaler}
         const picIndex = randomInt(1,6) === 2 ? 1 : 0
         const image = new GameImage(Tree.imageSources[picIndex], size.width, size.height)
-        super(game, image, [x,-40,depth])
+        super(game, image, {x:x, y:-40, z:depth})
         this.shadow = new Image()
         this.shadow.src = `./images/tree_shadows_v2/${Math.floor(randomValue(1,7))}.png`
         this.shadowWidthMultiplier = randomValue(0.85,1)
@@ -678,13 +727,14 @@ class Bush extends GroundedObjects {
         const size = {width: 240 * scaler, height: 150 * scaler}
         const picIndex = randomInt(0,1)
         const image = new GameImage(Bush.imageSources[picIndex], size.width, size.height)
-        super(game, image, [x,0,depth])
+        super(game, image, {x:x, y:0, z:depth})
         this.shadow = new Image()
         this.shadow.src = "./images/shadow_small.png"
-        if (Math.abs(Bush.sideBias) > 1200) {
+        Bush.sideBias += x
+        if (Math.abs(Bush.sideBias) > 2000) {
             this.x *= -1
             Bush.sideBias = 0;
-        } else Bush.sideBias += x
+        }
     }
     drawShadow(){}
 }
@@ -692,7 +742,7 @@ class Bush extends GroundedObjects {
 class SkyLayer extends GameObj{
     static image = new GameImage("./images/sky_layers/skylayer3.png",2500,2500)
     constructor(game, startDepth, endOffset){
-        super(game,SkyLayer.image,[0,0,startDepth])
+        super(game,SkyLayer.image, {x:0, y:0, z:startDepth})
         this.endOffset = endOffset
         this.image.alpha = showElementsAtAnyDistance ? 0 : 1
     }
@@ -713,7 +763,7 @@ class SkyLayer extends GameObj{
 class Sprite extends GameObj{
     constructor(game, bitmaps, maxWidth, maxHeight, heightOffset = 0){
         const gameImage = new GameImage(undefined, maxWidth, maxHeight)
-        super(game, gameImage, [0,heightOffset,0])
+        super(game, gameImage, {x:0, y: heightOffset, z: 0})
         this.frame = 0;
         this.frames = []
         for (let i = 0; i < bitmaps.length; i++) {
@@ -738,42 +788,34 @@ class Sprite extends GameObj{
 class Projectile_test extends GameObj {
     static soccorBall(game){
         const image = new GameImage(`./images/football.png`,100,100)
-        const ball = new Projectile_test(game,image, [0,50,0])
+        const ball = new Projectile_test(game,image, {x:0, y: 50, z: 0})
         ball.velocity = {x:randomInt(-10,10), y:randomInt(0,1) === 0 ? 30 : 5, z:15}
         ball.groundFriction *= 0.05
-        ball.bounceDampening *= 0.5 
+        ball.bounceDampening = -0.5 
         return ball
     }
     static bowlingBall(game) {
         const image = new GameImage(`./images/bowlingball.png`,125,125)
-        const ball = new Projectile_test(game,image, [0,0,0])
+        const ball = new Projectile_test(game,image, {x:0,y:0,z:0})
         ball.velocity = {y:randomInt(0,1) === 0 ? 40 : 0, x:randomInt(-10,10), z:0}
         ball.velocity.z = ball.velocity.y > 0 ? 15 : 40
         ball.groundFriction *= 0.05
         ball.bounceDampening = 0.9
         return ball
     }
-    static moveableSquare(game,depth){
-        const image = new GameImage(`./images/test_square.png`,200,200)
-        const square = new Projectile_test(game, image, [0,0,depth])
-        square.image.alpha = 0
-        square.bounceDampening = 0.8
-        square.frameLifeSpan = undefined
-        return square;
-    }
-    constructor(game, gameImage, [x,y,z]){
-        super(game, gameImage, [x,y,z])
+    constructor(game, gameImage, basePoint){
+        super(game, gameImage, basePoint)
         this.game = game;
         this.velocity = {x:0,y:0,z:0}
-        this.force = {x:0,y:-2.5,z:0} //2.5 default to represent gravity
-        this.borders = {x:[-750,750],y:[0,undefined], z:[-100,2100]} //[lowerlimit, upper limit]
+        this.force = {x:0,y:-2,z:0} //-2.5 default to represent gravity
+        this.borders = {x:[-750,750],y:[0,undefined], z:[undefined,2100]} //[lowerlimit, upper limit]
         this.rotationSpeed = 0
         this.mass = 1
         this.airFriction = 0.005
         this.groundFriction = 0.1
         this.bounceDampening = 0.5  // max 1 (negative value needed for infnite bouncing) 
         this.framesActive = 0
-        this.frameLifeSpan = 400
+        this.frameLifeSpan = 1000
         this.shadow = new Image()
         this.shadow.src = "./images/shadow_small.png"
         this.relativeSpeed = 0
@@ -810,8 +852,11 @@ class Projectile_test extends GameObj {
         this.z = newPos.z
         this.moveWithPerspective();
         this.framesActive += 1
-        this.image.angle += this.rotationSpeed*Math.PI*2 
+        this.image.angle += this.rotationSpeed * (Math.PI*2 / this.game.fps)
         if (this.framesActive > this.frameLifeSpan) this.markedForDel = true;
+
+
+
     }
     collision(axis,borderIndex){
         const {velocity, newPos, borders, force} = this
@@ -836,42 +881,106 @@ class Projectile_test extends GameObj {
 }
 
 class Coin extends Projectile_test{
-
-    static imageParams = [`./images/coin.png`,55*0.6,42*0.6]
-
+    static imageParams = [`./images/coin.png`,55*0.5,42*0.5]
     static lastSfxValue = 0 
-
-    constructor(game,[x,y,z], [x2,y2,z2]){
-        super(game, new GameImage(...Coin.imageParams), [x+randomValue(-10,10), y+randomValue(-10,10),z])
+    constructor(game,startPoint, targetPoint){
+        super(game, new GameImage(...Coin.imageParams), startPoint)
         this.game = game
         this.setSfx()
         this.airFriction = 0;
-        this.rotationSpeed = randomValue(-0.02,0.02)
-        this.target = [x2,y2,z2]
-        this.distances = [x2-x, y2-y, z2-z]
-        this.vector = unitVector(...this.distances)
-        for (const axis in this.vector){
-            this.velocity[axis] = this.vector[axis] * randomValue(-3,3)
-            this.force[axis] = this.vector[axis] * randomValue(0.4,0.6)
+        this.rotationSpeed = randomValue(-0.1,0.1)
+        this.start = startPoint
+        this.target = targetPoint
+        this.unitVector = unitVector(vectorFromPoints(this.start,this.target))
+        for (const axis in this.unitVector){
+            this.velocity[axis] = this.unitVector[axis] * randomValue(-2,2)
+            this.force[axis] = this.unitVector[axis] * randomValue(0.5,0.6)
         }
-        console.log(this.vector,this.velocity)
         this.relativeSpeed = -GameObj.scrollSpeed
+        this.borders.z[0] = -300
     }
     update(){
         super.update();
-        if (this.y > 800) this.image.fadeAlpha(-0.25)
+        if (this.z < randomValue(-200,-100)) this.image.fadeAlpha(-0.25)
         if (this.image.alpha <= 0) {
             this.markedForDel = true;
             this.sfx.play(); 
             this.game.stats.coins += 1       
-        }
-        //this.relativeSpeed = -GameObj.scrollSpeed    
+        }   
     }
     setSfx(){
         let num = Math.floor(randomValue(1,6))
         while(num === Coin.lastSfxValue) { num = Math.floor(randomValue(1,6)) }
         Coin.lastSfxValue = num
         this.sfx = new SoundEffect(`./sounds/coins/${num}.mp3`,0.3)
+    }
+}
+
+class FiredArrow extends Projectile_test {
+    static imageSource = './images/fired_arrow_2.png'
+    constructor(game, basePoint){
+        const image = new GameImage(FiredArrow.imageSource, 100*0.75, 185*0.75)
+        super(game, image, basePoint)
+        this.image.alpha = 0
+        this.force.y = 0
+        this.relativeSpeed = 0
+        this.velocity = changeVectorLength(vectorFromPoints(basePoint,{x:125 * Math.sign(basePoint.x),y:250,z:0}), 150) 
+        this.image.angle = Math.atan(this.velocity.x/this.velocity.z)
+    }
+    update(){
+        super.update();
+        this.image.fadeAlpha(0.25)
+        this.checkForCollison();
+    }
+    checkForCollison(){
+        if (this.z > 150) return;
+        const player = this.game.player
+        if (player.lane === this.lane &&
+            player.state === player.states["blocking"]){
+            const velocityDirection = -Math.sign(this.velX)
+            this.game.activeObjects.push(new BlockedArrow(this.game, {x:this.x, y:this.y , z:this.z} ))
+            this.game.addScore(2)
+            
+        } else player.receiveAttack(-0.4)
+        this.markedForDel = true;
+    }
+}
+
+class BlockedArrow extends Projectile_test {
+    static imageSource = './images/arrow_2.png'
+    constructor(game, startPoint){
+        const image = new GameImage(BlockedArrow.imageSource, 51*0.65, 178*0.65)
+        super(game, image, startPoint)
+        this.image.alpha = 1
+        this.sfx = new SoundEffect(`./sounds/clank/${Math.floor(Math.random()*5)}.wav`,0.2)
+        this.sfx.play(); 
+        this.force.y = -1.5
+        this.velocity.y = randomInt(30,40)
+        this.velocity.x = Math.sqrt(square(40)-square(this.velocity.y)) * Math.sign(startPoint.x) * 0.5
+        this.velocity.z = randomInt(0,15)
+        this.borders.x = [undefined,undefined]
+        this.image.angle = 0.5 * Math.sign(startPoint.x)
+        this.rotationSpeed = (-29 + this.velocity.y) * Math.sign(startPoint.x) * randomValue(0.2,0.3)
+        this.relativeSpeed = -GameObj.scrollSpeed
+    }
+    update(){
+        if (this.y < 200) this.image.fadeAlpha(-0.25)
+        if (this.image.alpha === 0) this.markedForDel = true;
+        super.update()
+    }
+}
+
+class DroppedBow extends Projectile_test {
+    static imageParams = ['./images/crossbow.png', 250*0.8, 141*0.8]
+    constructor(game, startPoint, flipped){
+        super(game, new GameImage(...DroppedBow.imageParams), startPoint)
+        this.image.flipped = flipped
+        this.bounceDampening = 0.9
+        this.velocity = {x:0, y:8, z:-2}
+    }
+    update(){
+        super.update();
+        if (this.z < 0) this.markedForDel = true
     }
 }
 
@@ -895,109 +1004,40 @@ class Projectile extends GameObj {
     drawShadow(){}
 }
 
-
-
-class BlockedArrow extends Projectile {
-    constructor(posX,heightOffset,velTotal,velX){
-        super('./images/arrow.png',
-            40*0.5, 150*0.5, posX, 0, heightOffset, velTotal, 
-            velX, 3.14*Math.sign(velX), randomValue(0.001,0.005)*velX)
-        this.gravity = 3
-        this.image.alpha = 1
-        this.sfx = new SoundEffect(`./sounds/clank/${Math.floor(Math.random()*5)}.wav`,0.2)
-        this.sfx.play();  
+class Spurt extends Projectile_test {
+    constructor(game, image, startPoint){
+        const adjustedPoint = {x: startPoint.x + randomInt(-25,25),
+                                y: startPoint.y + randomInt(-25,25),
+                                z: startPoint.z + randomInt(-5,-10)}
+        super(game, image, adjustedPoint)
+        this.bounceDampening = 1
+        this.airFriction *= 2
+        this.force.y *= 0.5
+        this.frameLifeSpan = 48
+        this.velocity.y = randomInt(0,15)
+        this.velocity.x = randomInt(-5,5)
+        this.velocity.z = randomValue(0,-5)
     }
     update(){
         super.update()
-        this.velX -= 0.5*Math.sign(this.velX)
-        if (this.y > 0) this.markedForDel = true;
-    }
-}
-
-class FiredArrow extends Projectile {
-    constructor(posXAtBase, depth, heightOffset, game){
-        super('./images/fired_arrow.png', 50, 100, posXAtBase, depth+10, heightOffset,0, 
-            -40*Math.sign(posXAtBase - GameObj.baseCenterX),0.25*Math.sign(posXAtBase - GameObj.baseCenterX))
-        this.gravity = 0;
-        this.velY = 1
-        this.relativeSpeed = 160
-        this.game = game
-        this.player = game.player
-    }
-    update(){
-        super.update();
-        this.moveWithPerspective();
-        this.checkForCollison();
-    }
-    checkForCollison(){
-        if (this.z > 100) return;
-        this.markedForDel = true;
-        if (this.player.lane === this.lane &&
-            this.player.state === this.player.states["blocking"]){
-            const velocityDirection = -Math.sign(this.velX)
-            const arrowDestinationX = GameObj.baseCenterX + velocityDirection*150
-            this.game.activeObjects.push(new BlockedArrow(arrowDestinationX,-300, 45, randomValue(15,25)*velocityDirection))
-            this.game.addScore(2)
-        } else this.player.receiveAttack(-0.4)
         
     }
 }
 
-class DroppedBow extends Projectile {
-    constructor(posXAtBase, depth, heightOffset, flipped){
-        super('./images/crossbow.png', 250*0.8, 141*0.8, posXAtBase, depth, heightOffset, 10, 0)
-        this.image.flipped = flipped
-    }
-    update(){
-        super.update();
-        this.moveWithPerspective();
-        if (this.y >= 0){
-            this.y = 0;
-            this.velX = 0;
-        }
-        this.image.fadeAlpha(-0.01)
-        if (this.z < 0) this.markedForDel = true
-    }
-}
-
-
-
-class Spurt extends Projectile {
-    constructor(posXAtBase, depth, heightOffset){
-        super (undefined,
-            40, 40, posXAtBase+randomInt(-25,25), depth, 
-            heightOffset+randomInt(-25,25), 
-            randomValue(3,15), 
-            randomValue(-4,4), 0, 0)
-    }
-    update(){
-        super.update()
-        this.moveWithPerspective();
-        this.framesActive += 1
-        if (this.framesActive === 80) this.markedForDel = true
-        if (this.y > 0){
-            this.y = 0;
-            this.velX = 0;
-            this.relativeSpeed = 0
-        }
-    }
-}
-
 class BloodSpurt extends Spurt {
-    constructor(posXAtBase, depth, heightOffset){
-        super (posXAtBase, depth, heightOffset)
-        this.image.src = `./images/blood/${randomInt(1,2)}.png`
-        this.relativeSpeed = this.velTotal/3
-        this.gravity = 0.8;
+    static imageSources = [`./images/blood/1.png`, `./images/blood/2.png`]
+    constructor(game, startPoint){
+        const image = new GameImage(BloodSpurt.imageSources[randomInt(0,1)], 40, 40)
+        super (game, image, startPoint)
+        
     }
 }
 
 class TurkeyMush extends Spurt {
-    constructor(posXAtBase, depth, heightOffset){
-        super (posXAtBase, depth, heightOffset)
-        this.image.src = `./images/turkey_bits/${randomInt(1,2)}.png`
-        this.relativeSpeed = -this.velTotal
-        this.gravity = 1;
+    static imageSources = [`./images/turkey_bits/1.png`, `./images/turkey_bits/2.png`]
+    constructor(game, startPoint){
+        const image = new GameImage(TurkeyMush.imageSources[randomInt(0,1)], 40, 40)
+        super (game, image, startPoint)
     }
 }
 
@@ -1015,8 +1055,8 @@ class SoundEffect {
 
 class Enemy extends GameObj {
     static enemies = []
-    constructor(game, image, [x,y,z]){
-        super(game, image, [x,y,z])
+    constructor(game, image, basePoint){
+        super(game, image, basePoint)
         this.game = game
         this.sfx = {}
         this.shadow = new Image()
@@ -1024,11 +1064,12 @@ class Enemy extends GameObj {
         Enemy.enemies.push(this)
     }
     spawnCoins(num){
-        const target = this.game.statsHandler.coinImages[1]
-        const targetCoords = [target.x - GameObj.baseCenterX, GameObj.bottomY - target.y, 0]
-        const startCoords = [this.x,this.y+this.image.height/2,this.z-150]
+        //const target = this.game.statsHandler.coinImages[1]
+        //const targetCoords = [target.x - GameObj.baseCenterX, GameObj.bottomY - target.y, 0]
+        const startPoint = {x: this.x, y: this.y+this.image.height/2, z: this.z-150}
+        const playerPoint = {x: 0, y: 500, z: -300}
         for (let i = 0; i < num; i++) {
-            const coin = new Coin(this.game,startCoords,targetCoords)
+            const coin = new Coin(this.game,startPoint,playerPoint)
             this.game.activeObjects.push(coin)
         } 
     }
@@ -1046,25 +1087,29 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
     static spawnWave(game, spawnDepth, waveSize=3){
         let x = 500 * randomSign()
         let depth = 4000
-        const wave = [new Bowman(game, [x,0,depth])]
+        const wave = [new Bowman(game, {x: x, y: 0, z: depth})]
         for (let i = 1; i < waveSize; i++) {
             x *= randomSign()
             let buffer = randomInt(300,400)
             if (x !== wave[i-1].x) buffer += 200
             depth -= buffer
-            wave.push(new Bowman(game, [x,0,depth]))
+            wave.push(new Bowman(game, {x: x, y: 0, z: depth}))
             Enemy.enemies.push(wave[i])
         }
         return wave;
     }
-    constructor(game, [x,y,z]){
-        super(game, new GameImage(...Bowman.imageParams.unloaded), [x,y,z])
+    constructor(game, basePoint){
+        const unloaded = new GameImage(...Bowman.imageParams.unloaded)
+        const loaded = new GameImage(...Bowman.imageParams.loaded)
+        const dead = new GameImage(...Bowman.imageParams.dead)
+        super(game, unloaded, basePoint)
+        this.images = {loaded:loaded, unloaded:unloaded, dead:dead}
         this.image.alpha = 0;
         this.image.flipped = this.lane === "right" ? true : false
         this.states = { unloaded: "unloaded", loaded: "loaded",
                         fired: "fired", dead: "dead"}
         this.state = "unloaded"
-        this.bowLoadDistance = 2000  
+        this.bowLoadDistance = 2000
         this.sfx.load = new SoundEffect (`./sounds/crossbow_loading/1.mp3`,0.1)
         this.sfx.death = new SoundEffect (`./sounds/death/${Math.floor(Math.random()*5)}.ogg`,0.3)
         this.sfx.death2 = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
@@ -1085,28 +1130,27 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
     loadBow(){
         this.state = "loaded"
         this.attackingFrame = this.game.totalFrames + 32
-        this.image = new GameImage(...Bowman.imageParams.loaded)
+        this.image = this.images.loaded
         this.image.flipped = this.lane === "right" ? true : false 
         this.sfx.load.play();
     }
     attack(){
         this.state = "fired"
-        this.image = new GameImage(...Bowman.imageParams.unloaded)
+        this.image = this.images.unloaded
         this.image.flipped = this.lane === "right" ? true : false
-        //this.game.activeObjects.push(new FiredArrow(posXAtBase,depth,-maxHeight/2, this.game))
-        
+        this.game.activeObjects.push(new FiredArrow(this.game, {x: this.x, y: this.y + this.image.height/2, z: this.z + 5}))
     }
     receiveAttack(){
         if (this.state === "dead") return;
         this.state = "dead"
-        this.image = new GameImage(...Bowman.imageParams.dead)
+        this.image = this.images.dead
         this.image.flipped = this.lane === "right" ? true : false
         this.sfx.death.play();
         this.sfx.death2.play();
-        const {posXAtBase,depth,maxHeight, flipped} = this
-        //this.game.activeObjects.push(new DroppedBow(posXAtBase, depth, -maxHeight/2, flipped))
+        const startPoint = {x: this.x, y: this.y + this.image.height/2, z: this.z-20}
+        this.game.activeObjects.push(new DroppedBow(this.game, startPoint, this.image.flipped))
         for (let index = 0; index < 30; index++) {
-            //this.game.activeObjects.push(new BloodSpurt(posXAtBase, depth, -maxHeight/2))   
+            this.game.activeObjects.push(new BloodSpurt(this.game, startPoint))   
         }
         this.spawnCoins(5)
         this.game.addScore(10)
@@ -1118,14 +1162,16 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
 }
 
 class Turkey extends Enemy {
+    static imageParams = ['./images/turkey.png', 384*0.9, 206*0.9]
     static bufferFrames = 0;
     static turkeySpawnable(){
         if (Turkey.bufferFrames < 1) return true;
         Turkey.bufferFrames -= 1
         return false;
     }
-    constructor(game, posXAtBase, depth){
-        super(game, './images/turkey.png', 384*0.9, 206*0.9, posXAtBase, depth)
+    constructor(game, startPoint){
+        const image = new GameImage(...Turkey.imageParams)
+        super(game, image, startPoint)
         this.sfx.death = new SoundEffect (`./sounds/gore/${Math.floor(Math.random()*3)}.wav`, 0.3)
         Turkey.bufferFrames += randomInt(1000,1800) / this.game.speedModifier
     }
@@ -1139,9 +1185,9 @@ class Turkey extends Enemy {
         this.markedForDel = true;
         this.game.health += 0.5
         this.sfx.death.play()
-        const {posXAtBase,depth,maxHeight} = this
+        const startPoint = {x:this.x, y:this.y+20, z: this.z} 
         for (let i = 0; i < 50; i++) {
-           this.game.activeObjects.push(new TurkeyMush(posXAtBase, depth, -maxHeight/2)) 
+           this.game.activeObjects.push(new TurkeyMush(this.game, startPoint)) 
         }
     }
 }

@@ -70,3 +70,12 @@ drawTestSquare(ctx){
         ctx.lineWidth = 6 * this.moveableSquare1.perspectiveScale
         ctx.stroke()
     }
+
+    static moveableSquare(game,depth){
+        const image = new GameImage(`./images/test_square.png`,200,200)
+        const square = new Projectile_test(game, image, [0,0,depth])
+        square.image.alpha = 0
+        square.bounceDampening = 0.8
+        square.frameLifeSpan = undefined
+        return square;
+    }
