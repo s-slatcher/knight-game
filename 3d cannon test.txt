@@ -1,0 +1,82 @@
+handleCannon(input){
+        if (input === 'up') this.cannonAngles3D[0] += Math.PI/70
+        if (input === 'down') this.cannonAngles3D[0] -= Math.PI/70
+        if (input === 'right') this.cannonAngles3D[1] += Math.PI/70
+        if (input === 'left') this.cannonAngles3D[1] -= Math.PI/70
+        if (input === 'arrowUp') this.cannonBack.vector.z += 10
+        if (input === 'arrowDown') this.cannonBack.vector.z -= 10
+        if (input === 'arrowRight') this.cannonBack.vector.x += 10
+        if (input === 'arrowLeft') this.cannonBack.vector.x -= 10
+
+        this.cannonAngles3D[0] = (this.cannonAngles3D[0] % (Math.PI * 2 * Math.sign(this.cannonAngles3D[0]))) || 0
+        this.cannonAngles3D[1] = (this.cannonAngles3D[1] % (Math.PI * 2 * Math.sign(this.cannonAngles3D[1]))) || 0
+
+        
+
+        const hypotenuse = 300
+        const yMag = Math.sin(this.cannonAngles3D[0]) * hypotenuse
+        this.baseMagnitude = Math.abs(Math.cos(this.cannonAngles3D[0]) * hypotenuse)
+        const zMag = Math.sin(this.cannonAngles3D[1]) * this.baseMagnitude
+        const xMag = Math.cos(this.cannonAngles3D[1]) * this.baseMagnitude
+
+        const vector = vectorDeepCopy(this.cannonBack.centralVector)
+        vector.x += xMag 
+        vector.y += yMag - this.cannonFront.image.height/2
+        vector.z += zMag
+        this.cannonFront.vector = vector
+
+        const yDifference2D = this.cannonFront.centerY - this.cannonBack.centerY 
+        const xDifference2D = this.cannonFront.centerX - this.cannonBack.centerX
+        this.cannonAngle2D = Math.atan((yDifference2D/xDifference2D))
+        this.hypotenuse2D = Math.abs(yDifference2D/Math.sin(this.cannonAngle2D))
+        this.cannonAngles2D = (this.cannonAngles2D % (Math.PI * 2 * Math.sign(this.cannonAngles2D))) || 0
+        console.log(this.hypotenuse2D / this.cannonFront.perspectiveScale, round(this.cannonAngle2D,2), round(this.cannonAngles3D[0],2))
+        
+        // const depthHeightDifference = this.cannonFront.vector.z * square(this.cannonFront.perspectiveScale) -
+        //                                 this.cannonBack.vector.z * square(this.cannonBack.perspectiveScale)
+        // console.log((this.hypotenuse2D / this.cannonBack.perspectiveScale) - Math.abs(depthHeightDifference))
+    }
+    drawCannon(ctx){
+        
+        const drawCannonBack = () => {
+            ctx.beginPath();
+            ctx.arc(this.cannonBack.centerX, this.cannonBack.centerY, this.cannonBack.dw/2, 0, 2 * Math.PI, false);
+            ctx.stroke()
+            ctx.fillStyle = 'black'
+            ctx.fill()
+            ctx.closePath();
+            }
+            //closer front circle
+            const drawCannonFront = () => {
+            ctx.beginPath();
+            let clockwise = true;
+            // issue with this radius calc is it assumes you are looking head on, a better version would use the perspective of the player.
+            let minorRadius = (this.cannonFront.dw/2) * (this.baseMagnitude/300)  
+            
+            if (this.cannonAngle2D < 0) clockwise = false
+            ctx.ellipse(this.cannonFront.centerX, this.cannonFront.centerY, this.cannonFront.dw/2,
+                     minorRadius, this.cannonAngle2D+Math.PI/2, 0, Math.PI*2, clockwise)
+            ctx.stroke()
+            ctx.fillStyle = 'green'
+            ctx.fill()
+            ctx.closePath();
+            }
+        if (this.cannonBack.vector.z < this.cannonFront.vector.z) {
+            drawCannonFront()
+            drawCannonBack()
+        } else {
+            drawCannonBack()
+            drawCannonFront()
+        }
+
+    }
+    createCannon(){
+        this.cannonFront = new GameObj(this.game, new GameImage(undefined,100,100),{x:0,y:0,z:300})
+        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:600})
+        this.cannonAngles3D = [0,Math.PI]
+        this.cannonAngle2D = 0
+        // this.game.activeObjects.push(this.cannonFront)
+        // this.game.activeObjects.push(this.cannonBack)
+        console.log(this.cannonFront, this.cannonBack)
+        this.playerToCannonAngles = []
+    }
