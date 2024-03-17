@@ -326,7 +326,7 @@ class Playing extends GameState {
     spawnBowWave(startingDepth){ 
         this.game.activeObjects.push(...Bowman.spawnWave(this.game,startingDepth,randomInt(2,3)))
         this.framesSinceBowman = 0
-        this.bowmanDelay = 400
+        this.bowmanDelay = 600
     }
     handleBackground(){
         if (this.treesDelay <= 0) {
@@ -342,8 +342,15 @@ class Playing extends GameState {
         this.ctxShadow.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
         this.overlayShadows()
-        this.game.activeObjects.forEach(e => e.draw(this.ctx))
-        this.drawCannon(this.ctx);
+        let drawnCannon = false;
+        this.game.activeObjects.forEach(e => {
+            
+            e.draw(this.ctx)
+            if (e.vector.z < this.cannonFront.vector.z && !drawnCannon) {
+                this.drawCannon(this.ctx)
+                drawnCannon = true; 
+            }
+        })
         this.game.player.draw(this.ctx)
         this.game.statsHandler.draw(this.ctx)
     }
@@ -377,21 +384,25 @@ class Playing extends GameState {
 
     //
     handleCannon(input){
-        if (input === 'up') this.cannonAngles[0] += Math.PI/70
-        if (input === 'down') this.cannonAngles[0] -= Math.PI/70
-        if (input === 'right') this.cannonAngles[1] += Math.PI/70
-        if (input === 'left') this.cannonAngles[1] -= Math.PI/70
+        if (input === 'up') this.cannonAngles[0] += Math.PI/100
+        if (input === 'down') this.cannonAngles[0] -= Math.PI/100
+        if (input === 'right') this.cannonAngles[1] += Math.PI/100
+        if (input === 'left') this.cannonAngles[1] -= Math.PI/100
         if (input === 'arrowUp') this.cannonBack.vector.z += 10
         if (input === 'arrowDown') this.cannonBack.vector.z -= 10
         if (input === 'arrowRight') this.cannonBack.vector.x += 10
         if (input === 'arrowLeft') this.cannonBack.vector.x -= 10
 
+        
+
         this.cannonAngles[0] = (this.cannonAngles[0] % (Math.PI * 2 * Math.sign(this.cannonAngles[0]))) || 0
         this.cannonAngles[1] = (this.cannonAngles[1] % (Math.PI * 2 * Math.sign(this.cannonAngles[1]))) || 0
 
-        const magnitude = 200
+        const magnitude = 300
 
-        const eyelineVector = vectorFromPoints(this.cannonBack.centralVector, {x:0,y:725,z:0})
+        const eyelineVector = vectorFromPoints(this.cannonBack.centralVector, {x:0,y:Game.height,z:0})
+
+
         const visualBasePoint = changeVectorLength(eyelineVector, magnitude)
         const visualBaseAngles = []
         visualBaseAngles[0] = Math.asin(visualBasePoint.y / magnitude)
@@ -437,6 +448,8 @@ class Playing extends GameState {
             ctx.arc(this.cannonBack.centerX, this.cannonBack.centerY, this.cannonBack.dw/2, 0, 2 * Math.PI, false);
             ctx.fillStyle = 'grey'
             ctx.fill()
+            ctx.strokeStyle = 'dimgrey'
+            ctx.lineWidth = 3 * this.cannonBack.perspectiveScale
             ctx.stroke()
             ctx.closePath();
             }
@@ -446,20 +459,25 @@ class Playing extends GameState {
             ctx.ellipse(this.cannonFront.centerX, this.cannonFront.centerY, radius,
                         minorRadius, rotation, 0, Math.PI*2, clockwise)
             ctx.fillStyle = 'black'
-            if (this.cannonBack.vector.z < this.cannonFront.vector.z) ctx.fillStyle = 'grey'
+            if (this.angleOfVisibility >1.517) ctx.fillStyle = 'grey'
+            
             ctx.fill()
+            ctx.lineWidth = 14 * this.cannonFront.perspectiveScale
+            ctx.strokeStyle = 'grey'
+            ctx.stroke() 
             ctx.closePath();
         } 
         
         const drawCannonBarrel = () => {
+            const points = []
             let p1 = {}
             let p2 = {}
             let p3 = {}
             let p4 = {}
-            p1.x = this.cannonFront.centerX + (Math.cos(rotation) * radius) 
-            p1.y = this.cannonFront.centerY + (Math.sin(rotation) * radius)
-            p2.x = this.cannonFront.centerX - (Math.cos(rotation) * radius)
-            p2.y = this.cannonFront.centerY - (Math.sin(rotation) * radius)
+            p1.x = this.cannonFront.centerX + (Math.cos(rotation) * radius * 1.1) 
+            p1.y = this.cannonFront.centerY + (Math.sin(rotation) * radius * 1.1)
+            p2.x = this.cannonFront.centerX - (Math.cos(rotation) * radius * 1.1)
+            p2.y = this.cannonFront.centerY - (Math.sin(rotation) * radius * 1.1)
             p3.x = this.cannonBack.centerX + (Math.cos(rotation) * radius2)
             p3.y = this.cannonBack.centerY + (Math.sin(rotation) * radius2)
             p4.x = this.cannonBack.centerX - (Math.cos(rotation) * radius2)
@@ -473,40 +491,30 @@ class Playing extends GameState {
             ctx.fillStyle = 'grey'
             
             ctx.fill()
-            ctx.stroke()
+            
             ctx.closePath()
         } 
-        
-        if (this.cannonBack.vector.z < this.cannonFront.vector.z) {
+            drawCannonBack()
             drawCannonBarrel()
             drawCannonFront()
-            drawCannonBack()
-        } else {
-            drawCannonBarrel()
-            drawCannonBack()
             
-            drawCannonFront()
-        }
-
-       
-        // ctx.beginPath();
-        // ctx.moveTo(this.cannonBack.centerX, this.cannonBack.centerY)
-        // ctx.lineTo(500,1000-725)
-        // ctx.strokeStyle = 'red'
-        // ctx.stroke()
-        // ctx.strokeStyle = 'black'
-        // ctx.closePath()
-
     }
     createCannon(){
-        this.cannonFront = new GameObj(this.game, new GameImage(undefined,100,100),{x:0,y:0,z:300})
-        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:600})
+        this.cannonFront = new GameObj(this.game, new GameImage(undefined,100,100),{x:0,y:0,z:0})
+        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:700})
         
         this.cannonAngles = [0,3*Math.PI/2]
         // this.game.activeObjects.push(this.cannonFront)
         // this.game.activeObjects.push(this.cannonBack)
         
         this.playerToCannonAngles = []
+        document.onclick = () => { 
+            const ball = Projectile.bowlingBall(this.game)
+            ball.vector = this.cannonFront.centralVector
+            ball.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.cannonFront.centralVector)),50) 
+            this.game.activeObjects.push(ball)
+
+        }
     }    
 }
 class GameOver extends GameState {
@@ -927,7 +935,7 @@ class Projectile extends GameObj{
         return ball
     }
     static bowlingBall(game) {
-        const image = new GameImage(`./images/bowlingball.png`,125,125)
+        const image = new GameImage(`./images/bowlingball.png`,90,90)
         const ball = new Projectile(game,image, {x:0,y:0,z:0})
         ball.velocity = {y:randomInt(0,1) === 0 ? 40 : 0, x:randomInt(-10,10), z:0}
         ball.velocity.z = ball.velocity.y > 0 ? 15 : 40
