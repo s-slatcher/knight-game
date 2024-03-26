@@ -19,12 +19,33 @@ canvas2.width = 1000
 canvas2.height = 1000
 canvas.style.aspectRatio = 1/1
 
+
+
 //cheats+testing --- normal settings for all is false
-const loadBlankSprites = true;
-const gameMuted = false;
-const disableEnemyDamage = false;
-const showElementsAtAnyDistance = false;
-const stillMotion = true;
+const loadBlankSprites = true
+let gameMuted = false;
+let disableEnemyDamage = true;
+let showElementsAtAnyDistance = false;
+let stillMotion = true;
+const db = {
+    sounds(){
+        gameMuted = !gameMuted
+        console.log("set muted to: ",!gameMuted)
+    },
+    damage(){
+        disableEnemyDamage = !disableEnemyDamage
+        console.log("set damage to: ",!disableEnemyDamage)
+    },
+    fog(){
+        showElementsAtAnyDistance = !showElementsAtAnyDistance
+        console.log("set fog to: ",!showElementsAtAnyDistance)
+    },
+    motion(){
+        stillMotion = !stillMotion
+        console.log("set motion to: ",!stillMotion)
+    }
+}
+
 
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
@@ -42,6 +63,12 @@ const dotProduct = (v1,v2) => {
     if (v1.z) dotProduct += v1.z * v2.z
     return dotProduct
 }
+const angleBetweenVectors = (v1,v2) => {
+    return Math.acos( 
+        dotProduct(v1,v2) / 
+        (vectorMagnitude(v1) * vectorMagnitude(v2))
+    )
+}
 const unitVector = (vector) => {
     const magntitude = vectorMagnitude(vector)
     const {x,y,z} = vector
@@ -49,6 +76,9 @@ const unitVector = (vector) => {
 }
 const vectorFromPoints = (vector1,vector2) => {
     return {x: vector2.x-vector1.x, y: vector2.y-vector1.y, z: vector2.z-vector1.z}
+}
+const addVectors = (v1,v2) => {
+    return {x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z}
 }
 const vectorDeepCopy = (vector) => {
     return vectorFromPoints({x:0,y:0,z:0},vector)
@@ -75,6 +105,8 @@ loadSprites().then( (bitmaps) => {
         startButton.addEventListener('click',() => {   
         startButton.classList.add("disabled")
         canvas.requestFullscreen().then(newGame(bitmaps)); 
+        console.log('%c Debug options: enter db.sounds(), db.damage(), db.motion(), db.fog() ', 
+        'background: #222; color: #bada55')
     })
 })
 
@@ -127,10 +159,8 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
-
-
 class Game {
-    static setPerspective(bottomY=canvas.height, perspectiveHeight=725, basesWidth=1000, startPercentage=0.22){
+    static setPerspective(bottomY=canvas.height, perspectiveHeight=500, basesWidth=900, startPercentage=0.18){
         Game.baseWidth = basesWidth
         Game.baseCenterX = canvas.width/2
         Game.height = perspectiveHeight
@@ -138,6 +168,12 @@ class Game {
         Game.topY = Game.bottomY - Game.height
         Game.startPercentage = startPercentage 
         Game.startY = Game.topY + (Game.height * Game.startPercentage)
+    }
+    static get2Dcoords(vector){
+        const scaling = 1 - ((vector.z) / (vector.z + Game.height))
+        const y = Game.bottomY - (vector.z * scaling) - (vector.y * scaling)
+        const x = Game.baseCenterX + (vector.x * scaling)
+        return ({x:x,y:y})
     }
     constructor(ctx, width, height, bitmaps){
         Game.setPerspective();
@@ -159,6 +195,8 @@ class Game {
                         gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
+        this.activeObjects.push(new CannonWielder(this,{x:0,y:0,z:400}))
+        
     }
     update(timestamp, keyRecord, touchRecord){
         const input = this.inputHandler.readInput(keyRecord, touchRecord)
@@ -256,7 +294,6 @@ class Paused extends GameState {
             if (pointInRectangle(e.dx, e.dy, e.dw, e.dh, clickCoords.x, clickCoords.y)){
                 endCycle = true
                 e.image.drawOutline(ctx, color, e.dx, e.dy, e.dw, e.dh)
-                console.log(`%c ${e.constructor.name}`, `color: ${color}; font-size: 30`, e)
             }
         })
         
@@ -275,7 +312,7 @@ class Initializing extends GameState {
         for (let i = 0; i < 7; i++) this.game.activeObjects.push(new SkyLayer(this.game,0+(i*50),i*100))
     }
     exit(){
-        if (stillMotion) this.game.player.moveSpeed = 0;
+        
     }
     update(input){ this.game.changeState("playing") }
     draw(ctx){ return }
@@ -292,7 +329,8 @@ class Playing extends GameState {
         this.shadowCanvas.height = this.height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
         //document.onclick = e => { document.onclick = e => {this.testProjectile(e)} }
-        this.createCannon();
+        
+        
     }
     update(input){
         if (!document.fullscreenElement) {
@@ -302,8 +340,8 @@ class Playing extends GameState {
         this.game.totalFrames++;
         this.handleEnemies();
         this.handleBackground();
-        this.handleCannon(input);
-        this.game.activeObjects.forEach((e)=>e.update())
+        //this.handleCannon(input);
+        this.game.activeObjects.forEach((e)=>e.update(input))
         this.game.player.update(input)
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
         this.game.activeObjects.sort((a,b)=> b.vector.z - a.vector.z)
@@ -331,7 +369,7 @@ class Playing extends GameState {
     handleBackground(){
         if (this.treesDelay <= 0) {
             Tree.spawnWave(this.game)
-            this.treesDelay += Math.floor(40/this.game.speedModifier)   //swap out for just checking if trees have traveled a certain depth from starting point
+            this.treesDelay += Math.floor(30/this.game.speedModifier)   //swap out for just checking if trees have traveled a certain depth from starting point
         } else this.treesDelay -= 1
         if (this.treesDelay === Math.floor(20/this.game.speedModifier)) {
             this.game.activeObjects.push(new Bush(this.game, 4000, randomValue(925,1025)*randomSign()))
@@ -342,14 +380,8 @@ class Playing extends GameState {
         this.ctxShadow.clearRect(0,0,this.width,this.height)
         this.drawStaticBackground(this.ctx);
         this.overlayShadows()
-        let drawnCannon = false;
         this.game.activeObjects.forEach(e => {
-            
             e.draw(this.ctx)
-            if (e.vector.z < this.cannonFront.vector.z && !drawnCannon) {
-                this.drawCannon(this.ctx)
-                drawnCannon = true; 
-            }
         })
         this.game.player.draw(this.ctx)
         this.game.statsHandler.draw(this.ctx)
@@ -376,146 +408,7 @@ class Playing extends GameState {
         ctx.fillStyle = "#cfbd86"
         ctx.fill();
     }
-    //
-
-    //
-
-    //
-
-    //
-    handleCannon(input){
-        if (input === 'up') this.cannonAngles[0] += Math.PI/100
-        if (input === 'down') this.cannonAngles[0] -= Math.PI/100
-        if (input === 'right') this.cannonAngles[1] += Math.PI/100
-        if (input === 'left') this.cannonAngles[1] -= Math.PI/100
-        if (input === 'arrowUp') this.cannonBack.vector.z += 10
-        if (input === 'arrowDown') this.cannonBack.vector.z -= 10
-        if (input === 'arrowRight') this.cannonBack.vector.x += 10
-        if (input === 'arrowLeft') this.cannonBack.vector.x -= 10
-
-        
-
-        this.cannonAngles[0] = (this.cannonAngles[0] % (Math.PI * 2 * Math.sign(this.cannonAngles[0]))) || 0
-        this.cannonAngles[1] = (this.cannonAngles[1] % (Math.PI * 2 * Math.sign(this.cannonAngles[1]))) || 0
-
-        const magnitude = 300
-
-        const eyelineVector = vectorFromPoints(this.cannonBack.centralVector, {x:0,y:Game.height,z:0})
-
-
-        const visualBasePoint = changeVectorLength(eyelineVector, magnitude)
-        const visualBaseAngles = []
-        visualBaseAngles[0] = Math.asin(visualBasePoint.y / magnitude)
-        const base = Math.abs(Math.cos(visualBaseAngles[0]) * magnitude)
-        visualBaseAngles[1] = Math.asin(visualBasePoint.z / base)
-        // console.log("angle from center to eyes:", visualBaseAngles)
-        // console.log("angle from center to front:", this.cannonAngles)
-        
-       
-        const yMag = Math.sin(this.cannonAngles[0]) * magnitude
-        this.baseMagnitude = Math.abs(Math.cos(this.cannonAngles[0]) * magnitude)
-        const zMag = Math.sin(this.cannonAngles[1]) * this.baseMagnitude
-        const xMag = Math.cos(this.cannonAngles[1]) * this.baseMagnitude
-
     
-        this.angleOfVisibility = Math.acos(
-            (dotProduct(visualBasePoint,{x:xMag,y:yMag,z:zMag}))
-            / (vectorMagnitude(visualBasePoint)*vectorMagnitude({x:xMag,y:yMag,z:zMag})))
-        
-
-        const vector = vectorDeepCopy(this.cannonBack.centralVector)
-        vector.x += xMag 
-        vector.y += yMag - this.cannonFront.image.height/2
-        vector.z += zMag
-        
-        // vector.x = visualBasePoint.x + this.cannonBack.centralVector.x
-        // vector.y = visualBasePoint.y + this.cannonBack.centralVector.y - this.cannonFront.image.height/2
-        // vector.z = visualBasePoint.z + this.cannonBack.centralVector.z 
-        this.cannonFront.vector = vector
-     
-    }
-    drawCannon(ctx){
-        ctx.strokeStyle = 'grey'
-        let clockwise = true;
-            // issue with this radius calc is it assumes you are looking head on, a better version would use the perspective of the player.
-            let minorRadius = (this.cannonFront.dw/2) * Math.abs(Math.cos(this.angleOfVisibility))
-            let radius = this.cannonFront.dw/2 
-            let radius2 = this.cannonBack.dw/2
-            let rotation = Math.atan((this.cannonFront.centerY-this.cannonBack.centerY)/(this.cannonFront.centerX - this.cannonBack.centerX)) + 1.571
-
-        const drawCannonBack = () => {
-            ctx.beginPath();
-            ctx.arc(this.cannonBack.centerX, this.cannonBack.centerY, this.cannonBack.dw/2, 0, 2 * Math.PI, false);
-            ctx.fillStyle = 'grey'
-            ctx.fill()
-            ctx.strokeStyle = 'dimgrey'
-            ctx.lineWidth = 3 * this.cannonBack.perspectiveScale
-            ctx.stroke()
-            ctx.closePath();
-            }
-        const drawCannonFront = () => {
-            ctx.beginPath();
-            if (this.cannonAngle2D < 0) clockwise = false
-            ctx.ellipse(this.cannonFront.centerX, this.cannonFront.centerY, radius,
-                        minorRadius, rotation, 0, Math.PI*2, clockwise)
-            ctx.fillStyle = 'black'
-            if (this.angleOfVisibility >1.517) ctx.fillStyle = 'grey'
-            
-            ctx.fill()
-            ctx.lineWidth = 14 * this.cannonFront.perspectiveScale
-            ctx.strokeStyle = 'grey'
-            ctx.stroke() 
-            ctx.closePath();
-        } 
-        
-        const drawCannonBarrel = () => {
-            const points = []
-            let p1 = {}
-            let p2 = {}
-            let p3 = {}
-            let p4 = {}
-            p1.x = this.cannonFront.centerX + (Math.cos(rotation) * radius * 1.1) 
-            p1.y = this.cannonFront.centerY + (Math.sin(rotation) * radius * 1.1)
-            p2.x = this.cannonFront.centerX - (Math.cos(rotation) * radius * 1.1)
-            p2.y = this.cannonFront.centerY - (Math.sin(rotation) * radius * 1.1)
-            p3.x = this.cannonBack.centerX + (Math.cos(rotation) * radius2)
-            p3.y = this.cannonBack.centerY + (Math.sin(rotation) * radius2)
-            p4.x = this.cannonBack.centerX - (Math.cos(rotation) * radius2)
-            p4.y = this.cannonBack.centerY - (Math.sin(rotation) * radius2)
-            ctx.beginPath()
-            ctx.moveTo(p1.x, p1.y)
-            ctx.lineTo(p3.x,p3.y)
-            ctx.lineTo(p4.x,p4.y)
-            ctx.lineTo(p2.x, p2.y)
-            ctx.lineTo(p1.x,p1.y)
-            ctx.fillStyle = 'grey'
-            
-            ctx.fill()
-            
-            ctx.closePath()
-        } 
-            drawCannonBack()
-            drawCannonBarrel()
-            drawCannonFront()
-            
-    }
-    createCannon(){
-        this.cannonFront = new GameObj(this.game, new GameImage(undefined,100,100),{x:0,y:0,z:0})
-        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:700})
-        
-        this.cannonAngles = [0,3*Math.PI/2]
-        // this.game.activeObjects.push(this.cannonFront)
-        // this.game.activeObjects.push(this.cannonBack)
-        
-        this.playerToCannonAngles = []
-        document.onclick = () => { 
-            const ball = Projectile.bowlingBall(this.game)
-            ball.vector = this.cannonFront.centralVector
-            ball.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.cannonFront.centralVector)),50) 
-            this.game.activeObjects.push(ball)
-
-        }
-    }    
 }
 class GameOver extends GameState {
     constructor(game){
@@ -535,6 +428,44 @@ class GameCompletion extends GameState {
     }
     update(input){
         
+    }
+}
+
+//note to self: finish implementing onto circle and line classes, 
+// take another look at the draw class maybe put that back in the GameObj class
+// rename GameObj to better reflect its role for raster image based elements in the scene
+// make the projectile class and (optional) add on for Point class (since physics is done on the point only)
+// custom projectiles like bowling ball will be a GameObj, with a Point with Point.phyics preset with particular parameters
+
+class Point {
+    constructor(coords){
+        this._x = coords.x
+        this._y = coords.y
+        this._z = coords.z
+        this.updateDisplayParameters()
+    }
+
+    get x(){ return this._x }
+    get y(){ return this._y }
+    get z(){ return this._z }
+
+    set x(val){ this._x = val 
+        this.updateDisplayParameters()}
+    set y(val){ this._y = val 
+        this.updateDisplayParameters()}
+    set z(val){ this._z = val 
+        this.updateDisplayParameters()}
+
+    updateDisplayParameters(){
+        this.perspectiveScale = 1 - ((this._z) / (this._z + Game.height))
+        this.cX = Game.baseCenterX + (this._x * this.perspectiveScale)
+        this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)
+    }
+    copyCoords(point){
+        this._x = point.x
+        this._y = point.y
+        this._z = point.z
+        this.updateDisplayParameters() 
     }
 }
 
@@ -596,18 +527,27 @@ class GameObj {
     constructor(game, gameImage, basePoint){
         this.game = game
         this.image = gameImage
-        this.vector = vectorDeepCopy(basePoint)
+        this.vector = new Point(vectorDeepCopy(basePoint))
         this.relativeSpeed = 0
         this.markedForDel = false;
         this.shadow = new Image()
         this.shadow.src = "./images/shadow_small.png"
     }
-    get perspectiveScale(){return 1 - (this.vector.z / (this.vector.z + Game.height))}
 
+    
+
+    // get perspectiveScale(){return 1 - ((this.vector.z) / (this.vector.z + Game.height))}
+    // get dw(){return this.image.width * this.perspectiveScale}
+    // get dh(){return this.image.height * this.perspectiveScale}
+    // get dy(){return Game.bottomY - (this.vector.z * this.perspectiveScale) - (this.vector.y * this.perspectiveScale) - this.dh}
+    // get dx(){return Game.baseCenterX - (this.dw/2) + (this.vector.x * this.perspectiveScale)}
+
+    //------ getters for transitioning to new 'Point' class for the vector, not useable yet -------
+    get perspectiveScale(){return this.vector.perspectiveScale}
     get dw(){return this.image.width * this.perspectiveScale}
     get dh(){return this.image.height * this.perspectiveScale}
-    get dy(){return Game.bottomY - (this.vector.z * this.perspectiveScale) - (this.vector.y * this.perspectiveScale) - this.dh}
-    get dx(){return Game.baseCenterX - (this.dw/2) + (this.vector.x * this.perspectiveScale)}
+    get dy(){return this.vector.cY - this.dh}
+    get dx(){return this.vector.cX - (this.dw/2)}
 
     get centralVector(){return {x: this.vector.x, y: this.vector.y + this.image.height/2, z: this.vector.z}}
     get centerX(){return this.dx+this.dw/2 }   
@@ -619,13 +559,16 @@ class GameObj {
             if (this.vector.x > 50) return "right"
             return "middle"
         }
+    
     draw(ctx){        
         if (this.imageGroundY < Game.startY && !showElementsAtAnyDistance) return;
         const {dx, dy, dw, dh} = this;
         this.image.draw(ctx,(dx), (dy), (dw), (dh))
 
     }
-    update(){}
+    update(){
+        console.log("updating gameobj")
+    }
     drawShadow(ctx, shadowImg, widthMultiplier){
         if (this.imageGroundY < Game.startY) return;
         if (!shadowImg) return;
@@ -649,17 +592,16 @@ class InputHandler {
         else return this.readTouchInput(touchRecord)
     }
     readKeyboardInput(keyRecord){
-        let input = 'middle'
-        if (keyRecord.includes('a')) input = 'left'
-        if (keyRecord.includes('d')) input = 'right'
-        if (keyRecord.includes('a') && keyRecord.includes('d')) input = 'middle'
-        if (keyRecord.includes(' ')) input = 'attack'
-        if (keyRecord.includes('s')) input = 'down'
-        if (keyRecord.includes('w')) input = 'up'
-        if (keyRecord.includes('ArrowUp')) input = 'arrowUp'
-        if (keyRecord.includes('ArrowDown')) input = 'arrowDown'
-        if (keyRecord.includes('ArrowLeft')) input = 'arrowLeft'
-        if (keyRecord.includes('ArrowRight')) input = 'arrowRight'
+        let input = []
+        if (keyRecord.includes('a')) input.push('left')
+        if (keyRecord.includes('d')) input.push('right')
+        if (keyRecord.includes(' ')) input.push('attack')
+        if (keyRecord.includes('s')) input.push('down')
+        if (keyRecord.includes('w')) input.push('up')
+        if (keyRecord.includes('ArrowUp')) input.push ('arrowUp')
+        if (keyRecord.includes('ArrowDown')) input.push ('arrowDown')
+        if (keyRecord.includes('ArrowLeft')) input.push ('arrowLeft')
+        if (keyRecord.includes('ArrowRight')) input.push ('arrowRight')
         return input
     }
     readTouchInput(touchRecord){
@@ -747,6 +689,7 @@ class GameText {
         }
         if (this.stroke > 0){
             ctx.lineWidth = this.stroke
+            ctx.strokeStyle = this.strokeColor
             ctx.strokeText(this.content,x,y)
         }
         ctx.fillStyle = this.color
@@ -819,6 +762,121 @@ class AnimatedText {
         this.text.draw(ctx)
     }
 }
+class Line {
+    constructor(game, p1, p2){
+        this.game = game
+        this.p1 = p1
+        this.p2 = p2
+        this.markedForDel = false;
+        this.stroke = 5
+    }
+    get vector(){return vectorDeepCopy(this.p2)}
+    update(){}
+    draw(ctx){
+        const p1Proj = Game.get2Dcoords(this.p1)
+        const p2Proj = Game.get2Dcoords(this.p2)
+        ctx.lineWidth = (1 - ((this.p1.z) / (this.p1.z + Game.height))) * this.stroke
+        ctx.strokeStyle = 'purple'
+        ctx.beginPath()
+        ctx.moveTo(p1Proj.x,p1Proj.y)
+        ctx.lineTo(p2Proj.x,p2Proj.y)
+        ctx.stroke()
+        ctx.closePath()
+    }
+    drawShadow(){}
+
+
+}
+
+class Circle extends GameObj{
+    constructor(game, radius, centerPoint, angleXZ, angleZY){
+    super(game, new GameImage(undefined,radius*2,radius*2),centerPoint)
+       this.game = game
+       this.radius = radius 
+       this.angleXZ = angleXZ
+       this.angleZY = angleZY
+       this.stroke = 5
+       this.strokeColor = 'black'
+       this.fillFace = undefined
+       this.fillBack = undefined
+    }
+    get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z} }
+
+    get projectedCoords(){ return Game.get2Dcoords(this.vector) }
+
+    get rotationAngle() {
+        const point1 = this.projectedCoords
+        const normal = this.normalVector
+        const point2 = Game.get2Dcoords(addVectors(this.vector, normal))
+        return 1.571 + Math.atan((point2.y - point1.y) / (point2.x - point1.x))
+    }
+    get normalVector(){ return {
+        x:Math.cos(this.angleXZ) * Math.cos(this.angleZY),
+        y:Math.sin(this.angleZY),
+        z:Math.sin(this.angleXZ) * Math.cos(this.angleZY)
+    }}
+    
+    get angleOfVisibility(){ return angleBetweenVectors(this.visionVector, this.normalVector)}
+
+    get minorRadius(){ return this.radius * this.perspectiveScale * Math.abs(Math.cos(this.angleOfVisibility)) }
+
+    setAngleFromNormalVector(vector){
+        
+    }
+    update(){
+        
+        if (this.vector.z < 0) this.markedForDel 
+    }
+    draw(ctx){
+        const vector2D = this.projectedCoords
+        let rotation = this.rotationAngle
+        let minorRadius = this.minorRadius
+       
+        //if (rotation < 0.1) rotation = 0
+        
+        const drawCircle = () => {
+            ctx.beginPath()
+            const clockwise = this.angleOfVisibility > 1.571 ? true : false
+            ctx.ellipse(vector2D.x, vector2D.y, Math.abs(this.dh/2),
+                minorRadius, rotation, 0, Math.PI*2, clockwise)
+            if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
+            else ctx.fillStyle = this.fillBack
+            if (this.fillFace) ctx.fill()
+            ctx.strokeStyle = this.strokeColor
+            ctx.lineWidth = this.stroke * this.perspectiveScale
+            ctx.stroke()
+            ctx.closePath()
+        }
+
+        const drawNormalLine = () => {
+            ctx.beginPath()
+            ctx.moveTo(vector2D.x, vector2D.y)
+            const perpdenciularVector = changeVectorLength(this.normalVector , 80)
+            const perpPoint2D = Game.get2Dcoords(addVectors(this.vector, perpdenciularVector))
+            ctx.lineTo(perpPoint2D.x, perpPoint2D.y)
+            ctx.strokeStyle = 'red'
+            ctx.lineWidth = 5 * this.perspectiveScale
+            ctx.stroke()
+            
+            ctx.closePath() 
+
+            // const normalAngle2D = Math.atan((perpPoint2D.y - vector2D.y) / (perpPoint2D.x - vector2D.x))
+            // this.rotation = normalAngle2D + 1.571
+
+        }
+
+        if (Math.abs(this.angleOfVisibility < 1.571)) {
+            drawNormalLine(ctx, vector2D)
+            drawCircle()
+        } else {
+            drawCircle()
+            drawNormalLine(ctx, vector2D)
+        }
+    }
+    
+    drawShadow(){}
+    
+}
 
 class GroundedObjects extends GameObj{
     constructor(game, gameImage, depth){
@@ -833,10 +891,11 @@ class GroundedObjects extends GameObj{
 class Tree extends GroundedObjects {
     static imageSources = [`./images/trees/tree_v3_1.png`,
                      `./images/trees/tree_v3_2.png`]
+    
 
     static spawnWave(game){
-        const tree1 = new Tree(game,4000,randomInt(1030,1070))
-        const tree2 = new Tree(game,4000,-1 * randomInt(1030,1070))
+        const tree1 = new Tree(game,4000,randomInt(950,1070))
+        const tree2 = new Tree(game,4000,-1 * randomInt(950,1070))
         tree1.image.flipped = randomInt(0,1) === 1
         tree2.image.flipped = randomInt(0,1) === 1
         game.activeObjects.push(tree1,tree2)
@@ -880,7 +939,7 @@ class Bush extends GroundedObjects {
 }
 
 class SkyLayer extends GameObj{
-    static image = new GameImage("./images/sky_layers/skylayer3.png",2500,2500)
+    static image = new GameImage("./images/sky_layers/skylayer3.png",2500,3000)
     constructor(game, startDepth, endOffset){
         super(game,SkyLayer.image, {x:0, y:0, z:startDepth})
         this.endOffset = endOffset
@@ -935,7 +994,7 @@ class Projectile extends GameObj{
         return ball
     }
     static bowlingBall(game) {
-        const image = new GameImage(`./images/bowlingball.png`,90,90)
+        const image = new GameImage(`./images/bowlingball.png`,80,80)
         const ball = new Projectile(game,image, {x:0,y:0,z:0})
         ball.velocity = {y:randomInt(0,1) === 0 ? 40 : 0, x:randomInt(-10,10), z:0}
         ball.velocity.z = ball.velocity.y > 0 ? 15 : 40
@@ -969,11 +1028,11 @@ class Projectile extends GameObj{
             borders[axis].forEach((border,index) => {
                 const side = index === 0 ? -1 : 1  //used to reverse inequalities when border is left (index 0)
                 if (vector[axis] - velocity[axis] === border  //true if obj is moving into border it was touching last frame 
-                    && side * (vector[axis]) > side * border){
+                    && side * (vector[axis]) > side * border){ 
                         vector[axis] -= velocity[axis]
                         velocity[axis] = 0
                     }
-                if (side * vector[axis] > side * border) { //checks collision, cant be true if previous if-block reset the newPos
+                if (side * vector[axis] > side * border) { //checks collision, cant be true if previous if-block reset the position
                     this.collision(axis,index)
                 }
             })
@@ -994,8 +1053,22 @@ class Projectile extends GameObj{
         let decreaser = Math.pow(velMagnitude,this.bounceDampening) - (1-this.bounceDampening)
         if (decreaser < velMagnitude) velocity[axis] -= decreaser * Math.sign(velocity[axis])
         else velocity[axis] = 0
-        console.log("bounced")
+        
     }
+    // collision change notes:
+    // colliding with wall (rectangle)(my currently my only type of collision check) 
+    // and colliding with other object (defined by a point and a radius) are different kinds of checks.
+    //
+    // the wall is basically an object that only absorbs and applies force given back in the perpdenciular direction, and does not move with force
+    // the two types of collision are surface and between two circles (billiard ball esque, with varrying levels of elasticity) 
+    // I could calc angled planes for the surfaces for more complexity rather than just flat xy,xz,yz planes 
+    // 2 soccer balls hit each other, each has vel vector and kinetic energy equal to the vel times mass. 
+    // if one is stationary, the second will hit it and check the angle it struck, at 45 deg angle, for instance, half the energy would go into 
+    // moving the stationary ball into that direction (45 off the moving one), the same force in the opposite direction will go into the moving ball,
+    // adding to its (now halved) intial force, and the two balls will move off 90 degrees apart with the same vel
+    // so-- check the collision by checking if their radius's overlap, check the angle between the force vector (starting at center) and 
+    // between the two balls centers (passing perpdendicular through the point of contact between them)\
+    // 
     rotation(){
           
     }
@@ -1169,7 +1242,6 @@ class Enemy extends GameObj{
     spawnCoins(num){
         const startPoint = this.centralVector
         startPoint.z -= 150
-        console.log(startPoint, this.centralVector)
         const playerPoint = {x: 0, y: 500, z: -400}
         for (let i = 0; i < num; i++) {
             const coin = new Coin(this.game,startPoint,playerPoint)
@@ -1262,6 +1334,159 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
     
 }
 
+class CannonWielder extends Enemy {
+    constructor(game, basePoint){
+        const alive = new GameImage(...Bowman.imageParams.unloaded)
+        super (game, alive ,basePoint)
+        this.image.height = 0
+        this.shotCooldown = 0
+        this.createCannon()
+    }
+    createCannon(){
+        
+        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:400})
+        this.cannonAngles = [0,3*Math.PI/2]
+
+        const wheels = [
+            this.wheelOne = new Circle(this.game,100,{x:0,y:0,z:0},0,0),
+            this.wheelTwo = new Circle(this.game,100,{x:0,y:0,z:0},0,0)
+        ]
+        for (let i = 0; i < wheels.length; i++) {
+            wheels[i].stroke = 15
+            wheels[i].strokeColor = '#723C07'
+        }
+        
+
+
+        this.newFront = new Circle(this.game,40,{x:0,y:500,z:30},0,0)
+        this.newFront.stroke = 12
+        this.newFront.strokeColor = 'grey'
+        this.newFront.fillFace = 'grey'
+        this.newFront.fillBack = 'black'
+        
+        this.testLine = new Line(this.game,this.cannonBack.vector,this.newFront.vector)
+        
+        this.game.activeObjects.push(this.newFront)
+        this.game.activeObjects.push(this.testLine)
+        this.game.activeObjects.push(this.wheelOne)
+        this.game.activeObjects.push(this.wheelTwo)
+
+        this.playerToCannonAngles = []
+        
+        
+        
+    }
+    update(input){
+        if (this.shotCooldown > 0) this.shotCooldown -= 1;
+
+        let directionVector = changeVectorLength(
+            {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},10)
+        let movement = {x:0,y:0,z:0}
+        if (input.includes('up')) this.cannonAngles[0] += Math.PI/80
+        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/80
+        if (input.includes('right')) this.cannonAngles[1] += Math.PI/80
+        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/80
+        if (input.includes('arrowUp')) movement = addVectors(movement,directionVector)
+        if (input.includes('arrowDown')) movement = vectorFromPoints(directionVector,movement)
+        if (input.includes('arrowRight')) movement.x += 10
+        if (input.includes('arrowLeft')) movement.x -= 10
+        if (input.includes('attack')) this.shoot();
+        
+        this.vector.x += movement.x
+        this.vector.y += movement.y
+        this.vector.z += movement.z
+
+        this.cannonBack.vector.copyCoords(this.vector)
+
+        this.newFront.angleXZ = this.cannonAngles[1]
+        this.newFront.angleZY = this.cannonAngles[0]
+        
+        const cannonBackCenter = vectorDeepCopy(this.cannonBack.vector)
+        cannonBackCenter.y += this.cannonBack.image.height/2
+        
+        const longerNormal = changeVectorLength(this.newFront.normalVector,300)
+        const newFrontPos = addVectors(cannonBackCenter,longerNormal)
+
+        this.newFront.vector.copyCoords(newFrontPos)
+        
+        const offCenterAdjustment = 50
+        this.wheelOne.angleXZ = this.newFront.angleXZ + 1.571
+        const wheelOneVector = addVectors(cannonBackCenter,changeVectorLength(this.wheelOne.normalVector,125))
+        wheelOneVector.y -= offCenterAdjustment
+        this.wheelOne.vector.copyCoords(wheelOneVector)
+
+        this.wheelTwo.angleXZ = this.newFront.angleXZ - 1.571
+        const wheelTwoVector = addVectors(cannonBackCenter,changeVectorLength(this.wheelTwo.normalVector,125))
+        wheelTwoVector.y -= offCenterAdjustment
+        this.wheelTwo.vector.copyCoords(wheelTwoVector)
+
+        this.testLine.p1 = cannonBackCenter
+        this.testLine.p2 = newFrontPos
+
+        
+     
+    }
+    draw(ctx){
+        super.draw(ctx)
+        ctx.strokeStyle = 'grey'
+        let radius2 = this.cannonBack.dw/2
+        const drawCannonBack = () => {
+            ctx.beginPath();
+            ctx.arc(this.cannonBack.centerX, this.cannonBack.centerY, this.cannonBack.dw/2, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'grey'
+            ctx.fill()
+            ctx.strokeStyle = 'dimgrey'
+            ctx.lineWidth = 3 * this.cannonBack.perspectiveScale
+            ctx.stroke()
+            ctx.closePath();
+            }
+        
+        
+        const drawCannonBarrel = () => {
+            const frontRotation = this.newFront.rotationAngle
+            const frontRadius = Math.abs(this.newFront.dh/2)
+            const newFrontProj = this.newFront.projectedCoords
+            
+            let p1 = {}
+            let p2 = {}
+            let p3 = {}
+            let p4 = {}
+
+            p1.x = newFrontProj.x + (Math.cos(frontRotation) * frontRadius * 1.1) 
+            p1.y = newFrontProj.y + (Math.sin(frontRotation) * frontRadius * 1.1)
+            p2.x = newFrontProj.x - (Math.cos(frontRotation) * frontRadius * 1.1)
+            p2.y = newFrontProj.y - (Math.sin(frontRotation) * frontRadius * 1.1)
+            p3.x = this.cannonBack.centerX + (Math.cos(frontRotation) * radius2)
+            p3.y = this.cannonBack.centerY + (Math.sin(frontRotation) * radius2)
+            p4.x = this.cannonBack.centerX - (Math.cos(frontRotation) * radius2)
+            p4.y = this.cannonBack.centerY - (Math.sin(frontRotation) * radius2)
+            ctx.beginPath()
+            ctx.moveTo(p1.x, p1.y)
+            ctx.lineTo(p3.x,p3.y)
+            ctx.lineTo(p4.x,p4.y)
+            ctx.lineTo(p2.x, p2.y)
+            ctx.lineTo(p1.x,p1.y)
+            ctx.fillStyle = 'grey'
+            
+            ctx.fill()
+            
+            ctx.closePath()
+        } 
+
+        drawCannonBack()
+        drawCannonBarrel()
+           
+    }
+    shoot(){
+        if (this.shotCooldown > 0) return;
+        else this.shotCooldown = 15
+        const ball = Projectile.bowlingBall(this.game)
+        ball.vector.copyCoords(this.newFront.vector)
+        ball.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.newFront.vector)),randomInt(50,60)) 
+        this.game.activeObjects.push(ball)
+    }
+}
+
 class Turkey extends Enemy {
     static imageParams = ['./images/turkey.png', 384*0.9, 206*0.9]
     static bufferFrames = 0;
@@ -1317,6 +1542,7 @@ class Player {
                         new SoundEffect(`./sounds/player_hurt/3.wav`,0.1), new SoundEffect(`./sounds/player_hurt/4.wav`,0.1)]}
     }
     update(input){
+        if (stillMotion) this.game.player.moveSpeed = 0;
         this.state.update(input);
         this.angleCounter += 1/15 * this.game.speedModifier
         if(!stillMotion) this.applyBounce()
@@ -1359,7 +1585,7 @@ class Player {
             damageBounceMod *= (1/this.damageRecoveryEffect)
         } else this.damageRecoveryEffect = 0 //delete?
         this.block.vector.y = 0 - this.getBounceMod(20 * damageBounceMod, this.angleCounter+0.25)
-        this.game.changePerspectiveHeight(710-(this.getBounceMod(10 * damageBounceMod, this.angleCounter)))
+        this.game.changePerspectiveHeight(500-(this.getBounceMod(10 * damageBounceMod, this.angleCounter)))
     }
     getBounceMod(intensity, angleInput) {
         let bounceOffset = Math.sin(angleInput) * intensity
@@ -1408,8 +1634,11 @@ class Blocking extends PlayerState {
         this.inputDelayCounter = 0;
         this.updateLane();
     }
-    update(input){
+    update(inputs){
+        let input = inputs[inputs.length-1]
+        if (!input || (inputs.includes('a') && inputs.includes('d'))) input = 'middle'
         this.sprite.image.fadeAlpha(0.2)
+        
         if (input === 'attack' && this.damageRecoveryEffect < 20){
             this.player.changeState("attacking")
             return;
