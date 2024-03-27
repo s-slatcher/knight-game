@@ -442,21 +442,18 @@ class Point {
         this._x = coords.x
         this._y = coords.y
         this._z = coords.z
-        this.updateDisplayParameters()
+        this.update()
     }
 
     get x(){ return this._x }
     get y(){ return this._y }
     get z(){ return this._z }
 
-    set x(val){ this._x = val 
-        this.updateDisplayParameters()}
-    set y(val){ this._y = val 
-        this.updateDisplayParameters()}
-    set z(val){ this._z = val 
-        this.updateDisplayParameters()}
+    set x(val){ this._x = val, this.update()}
+    set y(val){ this._y = val, this.update()}
+    set z(val){ this._z = val, this.update()}
 
-    updateDisplayParameters(){
+    update(){
         this.perspectiveScale = 1 - ((this._z) / (this._z + Game.height))
         this.cX = Game.baseCenterX + (this._x * this.perspectiveScale)
         this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)
@@ -465,8 +462,9 @@ class Point {
         this._x = point.x
         this._y = point.y
         this._z = point.z
-        this.updateDisplayParameters() 
+        this.update() 
     }
+    
 }
 
 class GameImage {
@@ -567,7 +565,7 @@ class GameObj {
 
     }
     update(){
-        console.log("updating gameobj")
+        
     }
     drawShadow(ctx, shadowImg, widthMultiplier){
         if (this.imageGroundY < Game.startY) return;
@@ -788,10 +786,10 @@ class Line {
 
 }
 
-class Circle extends GameObj{
+class Circle {
     constructor(game, radius, centerPoint, angleXZ, angleZY){
-    super(game, new GameImage(undefined,radius*2,radius*2),centerPoint)
        this.game = game
+       this.vector = new Point(vectorDeepCopy(centerPoint))
        this.radius = radius 
        this.angleXZ = angleXZ
        this.angleZY = angleZY
@@ -799,51 +797,52 @@ class Circle extends GameObj{
        this.strokeColor = 'black'
        this.fillFace = undefined
        this.fillBack = undefined
+       this.normalEndPoint = new Point(addVectors(this.vector, this.normalVector)) 
     }
     get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z} }
 
     get projectedCoords(){ return Game.get2Dcoords(this.vector) }
 
     get rotationAngle() {
-        const point1 = this.projectedCoords
-        const normal = this.normalVector
-        const point2 = Game.get2Dcoords(addVectors(this.vector, normal))
-        return 1.571 + Math.atan((point2.y - point1.y) / (point2.x - point1.x))
+        return 1.571 + Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
     }
-    get normalVector(){ return {
-        x:Math.cos(this.angleXZ) * Math.cos(this.angleZY),
-        y:Math.sin(this.angleZY),
-        z:Math.sin(this.angleXZ) * Math.cos(this.angleZY)
-    }}
+    get normalVector(){ 
+        const updatedNormal = {
+            x:Math.cos(this.angleXZ) * Math.cos(this.angleZY),
+            y:Math.sin(this.angleZY),
+            z:Math.sin(this.angleXZ) * Math.cos(this.angleZY)
+        }
+        if (this.normalEndPoint) this.normalEndPoint.copyCoords(addVectors(this.vector, updatedNormal))
+        return updatedNormal
+        
+    }
     
     get angleOfVisibility(){ return angleBetweenVectors(this.visionVector, this.normalVector)}
 
-    get minorRadius(){ return this.radius * this.perspectiveScale * Math.abs(Math.cos(this.angleOfVisibility)) }
+    get cameraMinorRadius(){ return this.radius * this.vector.perspectiveScale * Math.abs(Math.cos(this.angleOfVisibility)) }
 
-    setAngleFromNormalVector(vector){
-        
-    }
+    get cameraRadius(){ return this.radius * this.vector.perspectiveScale}
+
+    setAngleFromNormalVector(vector){}
+
     update(){
-        
         if (this.vector.z < 0) this.markedForDel 
     }
+
     draw(ctx){
+
         const vector2D = this.projectedCoords
-        let rotation = this.rotationAngle
-        let minorRadius = this.minorRadius
-       
-        //if (rotation < 0.1) rotation = 0
         
         const drawCircle = () => {
             ctx.beginPath()
             const clockwise = this.angleOfVisibility > 1.571 ? true : false
-            ctx.ellipse(vector2D.x, vector2D.y, Math.abs(this.dh/2),
-                minorRadius, rotation, 0, Math.PI*2, clockwise)
+            ctx.ellipse(vector2D.x, vector2D.y, this.cameraRadius,
+                this.cameraMinorRadius, this.rotationAngle, 0, Math.PI*2, clockwise)
             if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
             else ctx.fillStyle = this.fillBack
             if (this.fillFace) ctx.fill()
             ctx.strokeStyle = this.strokeColor
-            ctx.lineWidth = this.stroke * this.perspectiveScale
+            ctx.lineWidth = this.stroke * this.vector.perspectiveScale
             ctx.stroke()
             ctx.closePath()
         }
@@ -855,7 +854,7 @@ class Circle extends GameObj{
             const perpPoint2D = Game.get2Dcoords(addVectors(this.vector, perpdenciularVector))
             ctx.lineTo(perpPoint2D.x, perpPoint2D.y)
             ctx.strokeStyle = 'red'
-            ctx.lineWidth = 5 * this.perspectiveScale
+            ctx.lineWidth = 5 * this.vector.perspectiveScale
             ctx.stroke()
             
             ctx.closePath() 
@@ -943,13 +942,14 @@ class SkyLayer extends GameObj{
     constructor(game, startDepth, endOffset){
         super(game,SkyLayer.image, {x:0, y:0, z:startDepth})
         this.endOffset = endOffset
-        this.image.alpha = showElementsAtAnyDistance ? 0 : 1
+        
     }
     get destinationDepth(){
         return this.depthFromProjectedDistance(Game.bottomY - Game.startY) - this.endOffset
     }
     
     update(){
+        this.image.alpha = showElementsAtAnyDistance ? 0 : 1
         let difference = (this.destinationDepth - this.vector.z)
         if (Math.abs(difference) < 10) return 
         let speed = difference*0.05 + this.game.player.moveSpeed
@@ -1055,20 +1055,7 @@ class Projectile extends GameObj{
         else velocity[axis] = 0
         
     }
-    // collision change notes:
-    // colliding with wall (rectangle)(my currently my only type of collision check) 
-    // and colliding with other object (defined by a point and a radius) are different kinds of checks.
-    //
-    // the wall is basically an object that only absorbs and applies force given back in the perpdenciular direction, and does not move with force
-    // the two types of collision are surface and between two circles (billiard ball esque, with varrying levels of elasticity) 
-    // I could calc angled planes for the surfaces for more complexity rather than just flat xy,xz,yz planes 
-    // 2 soccer balls hit each other, each has vel vector and kinetic energy equal to the vel times mass. 
-    // if one is stationary, the second will hit it and check the angle it struck, at 45 deg angle, for instance, half the energy would go into 
-    // moving the stationary ball into that direction (45 off the moving one), the same force in the opposite direction will go into the moving ball,
-    // adding to its (now halved) intial force, and the two balls will move off 90 degrees apart with the same vel
-    // so-- check the collision by checking if their radius's overlap, check the angle between the force vector (starting at center) and 
-    // between the two balls centers (passing perpdendicular through the point of contact between them)\
-    // 
+   
     rotation(){
           
     }
@@ -1354,9 +1341,10 @@ class CannonWielder extends Enemy {
         for (let i = 0; i < wheels.length; i++) {
             wheels[i].stroke = 15
             wheels[i].strokeColor = '#723C07'
+            
         }
         
-
+        
 
         this.newFront = new Circle(this.game,40,{x:0,y:500,z:30},0,0)
         this.newFront.stroke = 12
@@ -1365,27 +1353,21 @@ class CannonWielder extends Enemy {
         this.newFront.fillBack = 'black'
         
         this.testLine = new Line(this.game,this.cannonBack.vector,this.newFront.vector)
-        
         this.game.activeObjects.push(this.newFront)
         this.game.activeObjects.push(this.testLine)
-        this.game.activeObjects.push(this.wheelOne)
-        this.game.activeObjects.push(this.wheelTwo)
 
-        this.playerToCannonAngles = []
-        
-        
-        
     }
     update(input){
         if (this.shotCooldown > 0) this.shotCooldown -= 1;
 
         let directionVector = changeVectorLength(
-            {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},10)
+            {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},5 + 15 * Math.abs(Math.cos(this.cannonAngles[0])))
+
         let movement = {x:0,y:0,z:0}
-        if (input.includes('up')) this.cannonAngles[0] += Math.PI/80
-        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/80
-        if (input.includes('right')) this.cannonAngles[1] += Math.PI/80
-        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/80
+        if (input.includes('up')) this.cannonAngles[0] += Math.PI/30
+        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/30
+        if (input.includes('right')) this.cannonAngles[1] += Math.PI/30
+        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/30
         if (input.includes('arrowUp')) movement = addVectors(movement,directionVector)
         if (input.includes('arrowDown')) movement = vectorFromPoints(directionVector,movement)
         if (input.includes('arrowRight')) movement.x += 10
@@ -1401,6 +1383,8 @@ class CannonWielder extends Enemy {
         this.newFront.angleXZ = this.cannonAngles[1]
         this.newFront.angleZY = this.cannonAngles[0]
         
+        
+
         const cannonBackCenter = vectorDeepCopy(this.cannonBack.vector)
         cannonBackCenter.y += this.cannonBack.image.height/2
         
@@ -1409,7 +1393,10 @@ class CannonWielder extends Enemy {
 
         this.newFront.vector.copyCoords(newFrontPos)
         
+        
+
         const offCenterAdjustment = 50
+
         this.wheelOne.angleXZ = this.newFront.angleXZ + 1.571
         const wheelOneVector = addVectors(cannonBackCenter,changeVectorLength(this.wheelOne.normalVector,125))
         wheelOneVector.y -= offCenterAdjustment
@@ -1422,9 +1409,6 @@ class CannonWielder extends Enemy {
 
         this.testLine.p1 = cannonBackCenter
         this.testLine.p2 = newFrontPos
-
-        
-     
     }
     draw(ctx){
         super.draw(ctx)
@@ -1444,7 +1428,7 @@ class CannonWielder extends Enemy {
         
         const drawCannonBarrel = () => {
             const frontRotation = this.newFront.rotationAngle
-            const frontRadius = Math.abs(this.newFront.dh/2)
+            const frontRadius = this.newFront.cameraRadius
             const newFrontProj = this.newFront.projectedCoords
             
             let p1 = {}
@@ -1472,10 +1456,21 @@ class CannonWielder extends Enemy {
             
             ctx.closePath()
         } 
-
-        drawCannonBack()
-        drawCannonBarrel()
-           
+        if (this.wheelOne.angleOfVisibility > 1.571) {
+            this.wheelTwo.draw(ctx)
+            drawCannonBack()
+            drawCannonBarrel()
+            this.wheelOne.draw(ctx)
+        } else {
+            this.wheelOne.draw(ctx)
+            drawCannonBack()
+            drawCannonBarrel()
+            
+            this.wheelTwo.draw(ctx)
+        }
+        
+        
+        
     }
     shoot(){
         if (this.shotCooldown > 0) return;
@@ -1559,7 +1554,7 @@ class Player {
     }
     moveObjectsCloser(){
         this.game.activeObjects.forEach((e)=>{
-            e.vector.z -= this.moveSpeed + e.relativeSpeed
+            e.vector.z -= this.moveSpeed + (e.relativeSpeed || 0)
         })
     }
     receiveAttack(dmg){
