@@ -14,15 +14,15 @@ let spritesLoaded = 0;
 startButton.innerHTML = `Loading`
 
 canvas.width = 1000;
-canvas.height = 1000;
+canvas.height = 800;
 canvas2.width = 1000
-canvas2.height = 1000
-canvas.style.aspectRatio = 1/1
+canvas2.height = 800
+canvas.style.aspectRatio = 1/0.8
 
 
 
 //cheats+testing --- normal settings for all is false
-const loadBlankSprites = true
+const loadBlankSprites = false
 let gameMuted = false;
 let disableEnemyDamage = true;
 let showElementsAtAnyDistance = false;
@@ -159,8 +159,13 @@ document.addEventListener("touchend", e => {
     delete touchRecord[`touch${id}`]
 })
 
+//notes on perspective: need to play with it more, considering add a margin at the bottom (lowering every 2d y value from some amount)
+// other option is just squish the 1x1 ratio of the canvas, raising the floor shrinking the perspective overall
+// third option, leave as is now and just increase the size of the elements to fit it better and make the player seem smaller. 
+
+
 class Game {
-    static setPerspective(bottomY=canvas.height, perspectiveHeight=500, basesWidth=900, startPercentage=0.18){
+    static setPerspective(bottomY=900, perspectiveHeight=500, basesWidth=1000, startPercentage=0.15){
         Game.baseWidth = basesWidth
         Game.baseCenterX = canvas.width/2
         Game.height = perspectiveHeight
@@ -169,12 +174,7 @@ class Game {
         Game.startPercentage = startPercentage 
         Game.startY = Game.topY + (Game.height * Game.startPercentage)
     }
-    static get2Dcoords(vector){
-        const scaling = 1 - ((vector.z) / (vector.z + Game.height))
-        const y = Game.bottomY - (vector.z * scaling) - (vector.y * scaling)
-        const x = Game.baseCenterX + (vector.x * scaling)
-        return ({x:x,y:y})
-    }
+   
     constructor(ctx, width, height, bitmaps){
         Game.setPerspective();
         this.ctx = ctx;
@@ -195,7 +195,7 @@ class Game {
                         gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
-        this.activeObjects.push(new CannonWielder(this,{x:0,y:0,z:400}))
+        this.activeObjects.push(new CannonWielder(this,{x:0,y:500,z:400}))
         
     }
     update(timestamp, keyRecord, touchRecord){
@@ -226,7 +226,7 @@ class Game {
         if (round(newSpeed,2) != this.speedModifier) {
             this.speedModifier = newSpeed
             this.player.moveSpeed = this.player.minimumSpeed * this.speedModifier
-            this.setViewDistance(0.22 - ((1/16)*(newSpeed-1)))
+            this.setViewDistance(0.15 - ((1/16)*(newSpeed-1)))
         }
     }
     getFramesDue(timestamp){
@@ -341,8 +341,9 @@ class Playing extends GameState {
         this.handleEnemies();
         this.handleBackground();
         //this.handleCannon(input);
-        this.game.activeObjects.forEach((e)=>e.update(input))
         this.game.player.update(input)
+        this.game.activeObjects.forEach((e)=>e.update(input))
+        
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
         this.game.activeObjects.sort((a,b)=> b.vector.z - a.vector.z)
         this.draw(this.ctx);   
@@ -369,7 +370,7 @@ class Playing extends GameState {
     handleBackground(){
         if (this.treesDelay <= 0) {
             Tree.spawnWave(this.game)
-            this.treesDelay += Math.floor(30/this.game.speedModifier)   //swap out for just checking if trees have traveled a certain depth from starting point
+            this.treesDelay += Math.floor(40/this.game.speedModifier)   //swap out for just checking if trees have traveled a certain depth from starting point
         } else this.treesDelay -= 1
         if (this.treesDelay === Math.floor(20/this.game.speedModifier)) {
             this.game.activeObjects.push(new Bush(this.game, 4000, randomValue(925,1025)*randomSign()))
@@ -439,21 +440,23 @@ class GameCompletion extends GameState {
 
 class Point {
     constructor(coords){
-        this._x = coords.x
-        this._y = coords.y
-        this._z = coords.z
-        this.update()
+        this._x = coords.x || 0
+        this._y = coords.y || 0
+        this._z = coords.z || 0
+        this.updateCamera()
     }
 
     get x(){ return this._x }
     get y(){ return this._y }
     get z(){ return this._z }
 
-    set x(val){ this._x = val, this.update()}
-    set y(val){ this._y = val, this.update()}
-    set z(val){ this._z = val, this.update()}
-
+    set x(val){ this._x = val, this.updateCamera() }
+    set y(val){ this._y = val, this.updateCamera() }
+    set z(val){ this._z = val, this.updateCamera() }
     update(){
+
+    }
+    updateCamera(){
         this.perspectiveScale = 1 - ((this._z) / (this._z + Game.height))
         this.cX = Game.baseCenterX + (this._x * this.perspectiveScale)
         this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)
@@ -462,9 +465,63 @@ class Point {
         this._x = point.x
         this._y = point.y
         this._z = point.z
-        this.update() 
+        this.updateCamera() 
     }
+    getCoords(){}
     
+}
+class PhysicsPoint extends Point{
+    constructor(coords = {x:0,y:0,z:0}){
+        super(coords)
+        this.velocity = {x:0,y:0,z:0}
+        this.force = {x:0,y:-2,z:0} //-2 default to represent gravity
+        this.borders = {x:[-750,750],y:[0,undefined], z:[undefined,2100]} //[lowerlimit, upper limit]
+        this.rotationSpeed = 0
+        this.mass = 1
+        this.airFriction = 0.005
+        this.groundFriction = 0.05
+        this.bounceDampening = 0.5  // max 1 (negative value needed for infnite bouncing) 
+        this.framesActive = 0
+    }
+    update(){
+        const {velocity, borders, force} = this
+        const vector = {x:this._x, y:this._y, z:this._z} //block works on a copy of the current coordinates
+        const onGround = vector.y >= borders.y[0] && velocity.y === 0
+        const deceleration = onGround ? this.groundFriction * this.mass : this.airFriction / this.mass
+        for (const axis in velocity) {
+            velocity[axis] *= 1-deceleration
+            velocity[axis] += force[axis]
+            vector[axis] += velocity[axis] 
+            borders[axis].forEach((border,index) => {
+                const side = index === 0 ? -1 : 1  //used to reverse inequalities when border is left/down/back
+                if (vector[axis] - velocity[axis] === border  //true if obj is moving into border it was touching last frame 
+                    && side * (vector[axis]) > side * border){ 
+                        vector[axis] -= velocity[axis]
+                        velocity[axis] = 0
+                    }
+                if (side * vector[axis] > side * border) { //checks collision, cant be true if previous if-block reset the position
+                    this.collision(vector, axis,index)
+                }
+            })
+        } 
+        this.framesActive += 1
+        this.copyCoords(vector)
+        super.update()
+        // this.image.angle += this.rotationSpeed * (Math.PI*2 / this.game.fps)
+    }
+    collision(vector, axis, borderIndex){
+        const {velocity, borders, force} = this
+        const distanceCovered = Math.abs(velocity[axis])
+        const overshootDistance = (Math.abs(vector[axis])-Math.abs(borders[axis][borderIndex]))
+        const velocityCorrection = force[axis] * ( (distanceCovered-overshootDistance) / distanceCovered )
+        vector[axis] = borders[axis][borderIndex]
+        velocity[axis] -= force[axis] - velocityCorrection
+        velocity[axis] *= -1
+        const velMagnitude = Math.abs(velocity[axis])
+        let decreaser = Math.pow(velMagnitude,this.bounceDampening) - (1-this.bounceDampening)
+        if (decreaser < velMagnitude) velocity[axis] -= decreaser * Math.sign(velocity[axis])
+        else velocity[axis] = 0 
+    }
 }
 
 class GameImage {
@@ -532,15 +589,6 @@ class GameObj {
         this.shadow.src = "./images/shadow_small.png"
     }
 
-    
-
-    // get perspectiveScale(){return 1 - ((this.vector.z) / (this.vector.z + Game.height))}
-    // get dw(){return this.image.width * this.perspectiveScale}
-    // get dh(){return this.image.height * this.perspectiveScale}
-    // get dy(){return Game.bottomY - (this.vector.z * this.perspectiveScale) - (this.vector.y * this.perspectiveScale) - this.dh}
-    // get dx(){return Game.baseCenterX - (this.dw/2) + (this.vector.x * this.perspectiveScale)}
-
-    //------ getters for transitioning to new 'Point' class for the vector, not useable yet -------
     get perspectiveScale(){return this.vector.perspectiveScale}
     get dw(){return this.image.width * this.perspectiveScale}
     get dh(){return this.image.height * this.perspectiveScale}
@@ -565,7 +613,7 @@ class GameObj {
 
     }
     update(){
-        
+        this.vector.update()
     }
     drawShadow(ctx, shadowImg, widthMultiplier){
         if (this.imageGroundY < Game.startY) return;
@@ -574,6 +622,13 @@ class GameObj {
         const height = width * 0.3
         const y = this.imageGroundY - (height/1.8)
         ctx.drawImage(shadowImg, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
+    }
+    addPhysics(){
+        console.log(this.vector)
+        const newPoint = new PhysicsPoint()
+        console.log(newPoint)
+        newPoint.copyCoords(this.vector)
+        this.vector = newPoint
     }
     swapGameImage(gameImage){
         this.image = gameImage
@@ -760,31 +815,31 @@ class AnimatedText {
         this.text.draw(ctx)
     }
 }
-class Line {
-    constructor(game, p1, p2){
-        this.game = game
-        this.p1 = p1
-        this.p2 = p2
-        this.markedForDel = false;
-        this.stroke = 5
-    }
-    get vector(){return vectorDeepCopy(this.p2)}
-    update(){}
-    draw(ctx){
-        const p1Proj = Game.get2Dcoords(this.p1)
-        const p2Proj = Game.get2Dcoords(this.p2)
-        ctx.lineWidth = (1 - ((this.p1.z) / (this.p1.z + Game.height))) * this.stroke
-        ctx.strokeStyle = 'purple'
-        ctx.beginPath()
-        ctx.moveTo(p1Proj.x,p1Proj.y)
-        ctx.lineTo(p2Proj.x,p2Proj.y)
-        ctx.stroke()
-        ctx.closePath()
-    }
-    drawShadow(){}
+// class Line {
+//     constructor(game, p1, p2){
+//         this.game = game
+//         this.p1 = p1
+//         this.p2 = p2
+//         this.markedForDel = false;
+//         this.stroke = 5
+//     }
+//     get vector(){return vectorDeepCopy(this.p2)}
+//     update(){}
+//     draw(ctx){
+//         const p1Proj = Game.get2Dcoords(this.p1)
+//         const p2Proj = Game.get2Dcoords(this.p2)
+//         ctx.lineWidth = (1 - ((this.p1.z) / (this.p1.z + Game.height))) * this.stroke
+//         ctx.strokeStyle = 'purple'
+//         ctx.beginPath()
+//         ctx.moveTo(p1Proj.x,p1Proj.y)
+//         ctx.lineTo(p2Proj.x,p2Proj.y)
+//         ctx.stroke()
+//         ctx.closePath()
+//     }
+//     drawShadow(){}
 
 
-}
+// }
 
 class Circle {
     constructor(game, radius, centerPoint, angleXZ, angleZY){
@@ -799,9 +854,7 @@ class Circle {
        this.fillBack = undefined
        this.normalEndPoint = new Point(addVectors(this.vector, this.normalVector)) 
     }
-    get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z} }
-
-    get projectedCoords(){ return Game.get2Dcoords(this.vector) }
+    get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z + 100} }
 
     get rotationAngle() {
         return 1.571 + Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
@@ -830,13 +883,11 @@ class Circle {
     }
 
     draw(ctx){
-
-        const vector2D = this.projectedCoords
         
         const drawCircle = () => {
             ctx.beginPath()
             const clockwise = this.angleOfVisibility > 1.571 ? true : false
-            ctx.ellipse(vector2D.x, vector2D.y, this.cameraRadius,
+            ctx.ellipse(this.vector.cX, this.vector.cY, this.cameraRadius,
                 this.cameraMinorRadius, this.rotationAngle, 0, Math.PI*2, clockwise)
             if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
             else ctx.fillStyle = this.fillBack
@@ -847,34 +898,50 @@ class Circle {
             ctx.closePath()
         }
 
-        const drawNormalLine = () => {
-            ctx.beginPath()
-            ctx.moveTo(vector2D.x, vector2D.y)
-            const perpdenciularVector = changeVectorLength(this.normalVector , 80)
-            const perpPoint2D = Game.get2Dcoords(addVectors(this.vector, perpdenciularVector))
-            ctx.lineTo(perpPoint2D.x, perpPoint2D.y)
-            ctx.strokeStyle = 'red'
-            ctx.lineWidth = 5 * this.vector.perspectiveScale
-            ctx.stroke()
+        // const drawNormalLine = () => {
+        //     ctx.beginPath()
+        //     ctx.moveTo(this.vector.cX, this.vector.cY)
+        //     const perpdenciularVector = changeVectorLength(this.normalVector , 80)
+        //     const perpPoint2D = Game.get2Dcoords(addVectors(this.vector, perpdenciularVector))
+        //     ctx.lineTo(perpPoint2D.x, perpPoint2D.y)
+        //     ctx.strokeStyle = 'red'
+        //     ctx.lineWidth = 5 * this.vector.perspectiveScale
+        //     ctx.stroke()
             
-            ctx.closePath() 
+        //     ctx.closePath() 
 
-            // const normalAngle2D = Math.atan((perpPoint2D.y - vector2D.y) / (perpPoint2D.x - vector2D.x))
-            // this.rotation = normalAngle2D + 1.571
+        //     // const normalAngle2D = Math.atan((perpPoint2D.y - vector2D.y) / (perpPoint2D.x - vector2D.x))
+        //     // this.rotation = normalAngle2D + 1.571
 
-        }
+        // }
 
         if (Math.abs(this.angleOfVisibility < 1.571)) {
-            drawNormalLine(ctx, vector2D)
+            //drawNormalLine(ctx, vector2D)
             drawCircle()
         } else {
             drawCircle()
-            drawNormalLine(ctx, vector2D)
+            //drawNormalLine(ctx, vector2D)
         }
     }
     
     drawShadow(){}
     
+}
+
+class BowlingBall extends GameObj{
+    constructor(game, point = {x:0,y:0,z:0}){
+        super(game, new GameImage(`./images/bowlingball.png`,80,80),point)
+        this.addPhysics()
+        this.vector.groundFriction = 0.01
+        this.vector.bounceDampening = 0.9
+        this.mass = 0.75
+    }
+    update(){
+        super.update()
+    }
+    drawShadow(ctx){
+        return;
+    }
 }
 
 class GroundedObjects extends GameObj{
@@ -893,8 +960,8 @@ class Tree extends GroundedObjects {
     
 
     static spawnWave(game){
-        const tree1 = new Tree(game,4000,randomInt(950,1070))
-        const tree2 = new Tree(game,4000,-1 * randomInt(950,1070))
+        const tree1 = new Tree(game,4000,randomInt(1000,1020))
+        const tree2 = new Tree(game,4000,-1 * randomInt(1000,1020))
         tree1.image.flipped = randomInt(0,1) === 1
         tree2.image.flipped = randomInt(0,1) === 1
         game.activeObjects.push(tree1,tree2)
@@ -984,6 +1051,9 @@ class Sprite extends GameObj{
     }
 }
 
+
+
+
 class Projectile extends GameObj{
     static soccorBall(game){
         const image = new GameImage(`./images/football.png`,100,100)
@@ -991,15 +1061,6 @@ class Projectile extends GameObj{
         ball.velocity = {x:randomInt(-10,10), y:randomInt(0,1) === 0 ? 30 : 5, z:15}
         ball.groundFriction *= 0.05
         ball.bounceDampening = -0.5 
-        return ball
-    }
-    static bowlingBall(game) {
-        const image = new GameImage(`./images/bowlingball.png`,80,80)
-        const ball = new Projectile(game,image, {x:0,y:0,z:0})
-        ball.velocity = {y:randomInt(0,1) === 0 ? 40 : 0, x:randomInt(-10,10), z:0}
-        ball.velocity.z = ball.velocity.y > 0 ? 15 : 40
-        ball.groundFriction *= 0.05
-        ball.bounceDampening = 0.9
         return ball
     }
     constructor(game, gameImage, basePoint){
@@ -1238,6 +1299,9 @@ class Enemy extends GameObj{
     drawShadow(ctx){
         super.drawShadow(ctx,this.shadow,1.1)
     }
+    receiveAttack(){
+
+    }
 }
 
 class Bowman extends Enemy {   //eventually split into states to deal with the logic and differing images better
@@ -1327,11 +1391,19 @@ class CannonWielder extends Enemy {
         super (game, alive ,basePoint)
         this.image.height = 0
         this.shotCooldown = 0
+        this.addPhysics()
+        this.vector.borders.y = [30,undefined]
+        this.vector.borders.z = [0,2000]
+        this.vector.bounceDampening = 0.9
+        this.vector.mass = 3
+        this.vector.groundFriction = 0.03
         this.createCannon()
+        this.relativeSpeed = -8
     }
     createCannon(){
         
         this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:400})
+        
         this.cannonAngles = [0,3*Math.PI/2]
 
         const wheels = [
@@ -1341,10 +1413,7 @@ class CannonWielder extends Enemy {
         for (let i = 0; i < wheels.length; i++) {
             wheels[i].stroke = 15
             wheels[i].strokeColor = '#723C07'
-            
         }
-        
-        
 
         this.newFront = new Circle(this.game,40,{x:0,y:500,z:30},0,0)
         this.newFront.stroke = 12
@@ -1352,14 +1421,16 @@ class CannonWielder extends Enemy {
         this.newFront.fillFace = 'grey'
         this.newFront.fillBack = 'black'
         
-        this.testLine = new Line(this.game,this.cannonBack.vector,this.newFront.vector)
+        //this.testLine = new Line(this.game,this.cannonBack.vector,this.newFront.vector)
         this.game.activeObjects.push(this.newFront)
-        this.game.activeObjects.push(this.testLine)
+        //this.game.activeObjects.push(this.testLine)
 
     }
     update(input){
+        super.update()
         if (this.shotCooldown > 0) this.shotCooldown -= 1;
 
+        
         let directionVector = changeVectorLength(
             {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},5 + 15 * Math.abs(Math.cos(this.cannonAngles[0])))
 
@@ -1382,8 +1453,6 @@ class CannonWielder extends Enemy {
 
         this.newFront.angleXZ = this.cannonAngles[1]
         this.newFront.angleZY = this.cannonAngles[0]
-        
-        
 
         const cannonBackCenter = vectorDeepCopy(this.cannonBack.vector)
         cannonBackCenter.y += this.cannonBack.image.height/2
@@ -1407,8 +1476,10 @@ class CannonWielder extends Enemy {
         wheelTwoVector.y -= offCenterAdjustment
         this.wheelTwo.vector.copyCoords(wheelTwoVector)
 
-        this.testLine.p1 = cannonBackCenter
-        this.testLine.p2 = newFrontPos
+        // this.testLine.p1 = cannonBackCenter
+        // this.testLine.p2 = newFrontPos
+
+            
     }
     draw(ctx){
         super.draw(ctx)
@@ -1423,23 +1494,21 @@ class CannonWielder extends Enemy {
             ctx.lineWidth = 3 * this.cannonBack.perspectiveScale
             ctx.stroke()
             ctx.closePath();
-            }
-        
+        }
         
         const drawCannonBarrel = () => {
             const frontRotation = this.newFront.rotationAngle
             const frontRadius = this.newFront.cameraRadius
-            const newFrontProj = this.newFront.projectedCoords
             
             let p1 = {}
             let p2 = {}
             let p3 = {}
             let p4 = {}
 
-            p1.x = newFrontProj.x + (Math.cos(frontRotation) * frontRadius * 1.1) 
-            p1.y = newFrontProj.y + (Math.sin(frontRotation) * frontRadius * 1.1)
-            p2.x = newFrontProj.x - (Math.cos(frontRotation) * frontRadius * 1.1)
-            p2.y = newFrontProj.y - (Math.sin(frontRotation) * frontRadius * 1.1)
+            p1.x = this.newFront.vector.cX + (Math.cos(frontRotation) * frontRadius * 1.1) 
+            p1.y = this.newFront.vector.cY + (Math.sin(frontRotation) * frontRadius * 1.1)
+            p2.x = this.newFront.vector.cX - (Math.cos(frontRotation) * frontRadius * 1.1)
+            p2.y = this.newFront.vector.cY - (Math.sin(frontRotation) * frontRadius * 1.1)
             p3.x = this.cannonBack.centerX + (Math.cos(frontRotation) * radius2)
             p3.y = this.cannonBack.centerY + (Math.sin(frontRotation) * radius2)
             p4.x = this.cannonBack.centerX - (Math.cos(frontRotation) * radius2)
@@ -1451,9 +1520,7 @@ class CannonWielder extends Enemy {
             ctx.lineTo(p2.x, p2.y)
             ctx.lineTo(p1.x,p1.y)
             ctx.fillStyle = 'grey'
-            
             ctx.fill()
-            
             ctx.closePath()
         } 
         if (this.wheelOne.angleOfVisibility > 1.571) {
@@ -1465,20 +1532,17 @@ class CannonWielder extends Enemy {
             this.wheelOne.draw(ctx)
             drawCannonBack()
             drawCannonBarrel()
-            
             this.wheelTwo.draw(ctx)
         }
-        
-        
-        
     }
     shoot(){
         if (this.shotCooldown > 0) return;
         else this.shotCooldown = 15
-        const ball = Projectile.bowlingBall(this.game)
+        const ball = new BowlingBall(this.game,{x:0,y:0,z:0})
         ball.vector.copyCoords(this.newFront.vector)
-        ball.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.newFront.vector)),randomInt(50,60)) 
+        ball.vector.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.newFront.vector)),randomInt(50,60)) 
         this.game.activeObjects.push(ball)
+        this.vector.velocity = {x:ball.vector.velocity.x * -0.6,y:ball.vector.velocity.y * -0.6,z:ball.vector.velocity.z * -0.6, }
     }
 }
 
@@ -1518,8 +1582,8 @@ class Pikeman extends Enemy {
 
 class Player {
     constructor(game, blockBitmaps, attackBitmaps){
-        this.block = new Sprite(game, blockBitmaps, 842, 609)
-        this.attack = new Sprite(game, attackBitmaps, 534*0.8, 871*0.8, 200)
+        this.block = new Sprite(game, blockBitmaps, 842*0.9, 609*0.9, 75)
+        this.attack = new Sprite(game, attackBitmaps, 534*0.8, 871*0.8, 50)
         this.block.image.alpha = 1;
         this.attack.image.alpha = 1;
         this.game = game;
@@ -1573,14 +1637,14 @@ class Player {
         if (healthOverlayIndex > 4) healthOverlayIndex = 4
         this.healthOverlayIndex = healthOverlayIndex 
     }
-    applyBounce(){    // look at fixing the damageRecoveryEffect, give it an ease in and out (check for diffence in damageBounceMod and damageRecovery Effect)
+    applyBounce(){    // this could be redone, but at least i need to stop hardcoding values like bounce mod and perspective
         let damageBounceMod = 1;
         if (this.damageRecoveryEffect > 1) {
             this.damageRecoveryEffect -=  2 * (this.damageRecoveryEffect/20)    
             damageBounceMod *= (1/this.damageRecoveryEffect)
         } else this.damageRecoveryEffect = 0 //delete?
-        this.block.vector.y = 0 - this.getBounceMod(20 * damageBounceMod, this.angleCounter+0.25)
-        this.game.changePerspectiveHeight(500-(this.getBounceMod(10 * damageBounceMod, this.angleCounter)))
+        this.block.vector.y = 50 - this.getBounceMod(25 * damageBounceMod, this.angleCounter+0.25)
+        this.game.changePerspectiveHeight(500 - (this.getBounceMod(10 * damageBounceMod, this.angleCounter)))
     }
     getBounceMod(intensity, angleInput) {
         let bounceOffset = Math.sin(angleInput) * intensity
@@ -1624,6 +1688,7 @@ class Blocking extends PlayerState {
         this.lastInput = 'middle'
     }
     enter(){
+        
     }
     exit(){
         this.inputDelayCounter = 0;
@@ -1683,6 +1748,9 @@ class Attacking extends PlayerState {
         this.activeFrameRange = [15,23]
         this.game = this.player.game
     }
+    enter(){
+        this.sprite.vector.z = 0;
+    }
     exit(){
         this.sprite.frame = 0
     }
@@ -1716,6 +1784,7 @@ class Attacking extends PlayerState {
     }
     angleAttack(){
         const sprite = this.sprite
+        if (this.inActiveFrameRange()) sprite.vector.z += 10
         sprite.image.angle = 0
         sprite.vector.x = 0
         sprite.vector.y = -300
