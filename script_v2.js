@@ -22,7 +22,7 @@ canvas.style.aspectRatio = 1/0.8
 
 
 //cheats+testing --- normal settings for all is false
-const loadBlankSprites = false
+const loadBlankSprites = true
 let gameMuted = false;
 let disableEnemyDamage = true;
 let showElementsAtAnyDistance = false;
@@ -46,7 +46,8 @@ const db = {
     }
 }
 
-
+// Math and vector functions 
+//---------------
 const randomSign = () => Math.random() >= 0.5 ? 1 : -1;
 const randomValue = (a,b) => Math.random() * (b-a) + a
 const randomInt = (a,b) => Math.floor(randomValue(a,b+1))
@@ -63,6 +64,15 @@ const dotProduct = (v1,v2) => {
     if (v1.z) dotProduct += v1.z * v2.z
     return dotProduct
 }
+
+const crossProduct = (v1, v2) => {
+    return {
+        x: v1.y * v2.z - v1.z * v2.y,
+        y: v1.z * v2.x - v1.x * v2.z,
+        z: v1.x * v2.y - v1.y * v2.x
+    };
+}
+
 const angleBetweenVectors = (v1,v2) => {
     return Math.acos( 
         dotProduct(v1,v2) / 
@@ -93,12 +103,51 @@ const pointInRectangle = function(x,y,w,h,x2,y2){
     else return false
 }
 
+function rotatePointAroundPoint(point, center, axis, angle) {
+    // Translate the point to the origin,
+    let translatedPoint = [
+        point.x - center.x,
+        point.y - center.y,
+        point.z - center.z
+    ];
+    // Normalize the axis
+    let axisLength = Math.sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    let normalizedAxis = [
+        axis.x / axisLength,
+        axis.y / axisLength,
+        axis.z / axisLength
+    ];
+
+    let cosAngle = Math.cos(angle);
+    let sinAngle = Math.sin(angle);
+    let x = (cosAngle + (1 - cosAngle) * normalizedAxis[0] * normalizedAxis[0]) * translatedPoint[0] +
+            ((1 - cosAngle) * normalizedAxis[0] * normalizedAxis[1] - normalizedAxis[2] * sinAngle) * translatedPoint[1] +
+            ((1 - cosAngle) * normalizedAxis[0] * normalizedAxis[2] + normalizedAxis[1] * sinAngle) * translatedPoint[2];
+    let y = ((1 - cosAngle) * normalizedAxis[0] * normalizedAxis[1] + normalizedAxis[2] * sinAngle) * translatedPoint[0] +
+            (cosAngle + (1 - cosAngle) * normalizedAxis[1] * normalizedAxis[1]) * translatedPoint[1] +
+            ((1 - cosAngle) * normalizedAxis[1] * normalizedAxis[2] - normalizedAxis[0] * sinAngle) * translatedPoint[2];
+    let z = ((1 - cosAngle) * normalizedAxis[0] * normalizedAxis[2] - normalizedAxis[1] * sinAngle) * translatedPoint[0] +
+            ((1 - cosAngle) * normalizedAxis[1] * normalizedAxis[2] + normalizedAxis[0] * sinAngle) * translatedPoint[1] +
+            (cosAngle + (1 - cosAngle) * normalizedAxis[2] * normalizedAxis[2]) * translatedPoint[2];
+
+    
+    return {
+        x : x + center.x,
+        y : y + center.y,
+        z : z + center.z
+    };
+}
+
 const getMousePosition = (event, element) => { 
     let rect = element.getBoundingClientRect(); 
     let x = (event.clientX - rect.left) * (1000/ rect.width); 
     let y = (event.clientY - rect.top) * (1000/ rect.width); 
     return {x:x, y:y}
 } 
+
+
+//-----------------------
+
 
 loadSprites().then( (bitmaps) => {
         startButton.innerHTML = "Start Game"
@@ -196,6 +245,8 @@ class Game {
         this.state = this.states.initializing
         this.state.enter();
         this.activeObjects.push(new CannonWielder(this,{x:0,y:500,z:400}))
+        //this.activeObjects.push(new Line(this,{x:100,y:300,z:-300},{x:-1000,y:900,z:3000}))
+        this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:900}))
         
     }
     update(timestamp, keyRecord, touchRecord){
@@ -328,9 +379,7 @@ class Playing extends GameState {
         this.shadowCanvas.width = this.width
         this.shadowCanvas.height = this.height
         this.ctxShadow = this.shadowCanvas.getContext("2d")
-        //document.onclick = e => { document.onclick = e => {this.testProjectile(e)} }
-        
-        
+        //document.onclick = e => { document.onclick = e => {this.testProjectile(e)} }   
     }
     update(input){
         if (!document.fullscreenElement) {
@@ -438,11 +487,11 @@ class GameCompletion extends GameState {
 // make the projectile class and (optional) add on for Point class (since physics is done on the point only)
 // custom projectiles like bowling ball will be a GameObj, with a Point with Point.phyics preset with particular parameters
 
-class Point {
-    constructor(coords){
-        this._x = coords.x || 0
-        this._y = coords.y || 0
-        this._z = coords.z || 0
+class Point { 
+    constructor(coords = {x:0,y:0,z:0}){
+        this._x = coords.x 
+        this._y = coords.y 
+        this._z = coords.z 
         this.updateCamera()
     }
 
@@ -450,25 +499,27 @@ class Point {
     get y(){ return this._y }
     get z(){ return this._z }
 
-    set x(val){ this._x = val, this.updateCamera() }
-    set y(val){ this._y = val, this.updateCamera() }
-    set z(val){ this._z = val, this.updateCamera() }
+    set x(num){ this._x = num, this.cX = Game.baseCenterX + (this._x * this.perspectiveScale) }
+    set y(num){ this._y = num, this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)}
+    set z(num){ this._z = num, this.updateCamera() }
+
+    get visionVector(){ return { x: this._x, y: this._y - Game.height, z: this._z + 100 } }
+
     update(){
 
     }
-    updateCamera(){
+    updateCamera(){ 
         this.perspectiveScale = 1 - ((this._z) / (this._z + Game.height))
         this.cX = Game.baseCenterX + (this._x * this.perspectiveScale)
         this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)
     }
     copyCoords(point){
+        this._z = point.z
         this._x = point.x
         this._y = point.y
-        this._z = point.z
         this.updateCamera() 
     }
     getCoords(){}
-    
 }
 class PhysicsPoint extends Point{
     constructor(coords = {x:0,y:0,z:0}){
@@ -815,31 +866,172 @@ class AnimatedText {
         this.text.draw(ctx)
     }
 }
-// class Line {
-//     constructor(game, p1, p2){
-//         this.game = game
-//         this.p1 = p1
-//         this.p2 = p2
-//         this.markedForDel = false;
-//         this.stroke = 5
-//     }
-//     get vector(){return vectorDeepCopy(this.p2)}
-//     update(){}
-//     draw(ctx){
-//         const p1Proj = Game.get2Dcoords(this.p1)
-//         const p2Proj = Game.get2Dcoords(this.p2)
-//         ctx.lineWidth = (1 - ((this.p1.z) / (this.p1.z + Game.height))) * this.stroke
-//         ctx.strokeStyle = 'purple'
-//         ctx.beginPath()
-//         ctx.moveTo(p1Proj.x,p1Proj.y)
-//         ctx.lineTo(p2Proj.x,p2Proj.y)
-//         ctx.stroke()
-//         ctx.closePath()
-//     }
-//     drawShadow(){}
+
+//If I make a shape class, I can draw lines between points by finding 4 points and drawing between them, creating a rectangle that is thicker closer to the player
+// 
+
+class Line {
+    constructor(game, p1, p2){
+        this.game = game
+        this.p1 = new Point(p1)
+        this.p2 = new Point(p2)
+        this.markedForDel = false;
+        this.stroke = 15
+    }
+    get vector(){return vectorFromPoints(this.p1,this.p2)}
+    update(){}
+    draw(ctx){
+        const p1Coords = {x:this.p1._x,y:this.p1._y,z:this.p1._z}
+        const vector = this.vector
+        const vectorMag = vectorMagnitude(vector)
+        const unitVec = unitVector(vector)
+        const split = 20 //number of 
+        const depth = this.p1.z - this.p2.z
+        const steps = Math.abs(depth/split)
+        const magntitudeStep = vectorMag/steps
+        ctx.strokeStyle = 'black'
+        for (let i = 0; i < steps; i++) {
+            ctx.beginPath()
+            ctx.moveTo(this.p1.cX, this.p1.cY)
+            const steppedCoords = changeVectorLength(unitVec,(i+1)*magntitudeStep)
+            this.p1.copyCoords(addVectors(p1Coords,steppedCoords))
+            ctx.lineTo(this.p1.cX,this.p1.cY)
+            ctx.lineWidth = this.stroke * this.p1.perspectiveScale 
+            ctx.stroke()
+            ctx.closePath()
+        }
+        ctx.beginPath()
+        ctx.moveTo(this.p1.cX, this.p1.cY)
+        ctx.lineTo(this.p2.cX, this.p2.cY)
+        ctx.lineWidth = this.stroke * this.p1.perspectiveScale
+        ctx.stroke()
+        this.p1.copyCoords(p1Coords)
+    }
+    drawShadow(){}
 
 
-// }
+}
+
+// multiple issues with this new circle test:
+// the secondary points arent linked together in translations, only in rotations (can tie both to some hierachy of points)
+
+
+class CircleTest {
+    constructor(game, radius, centerPoint, angleXZ = 0, angleY = 0){ //circle created, then angles applied as rotation 
+        this.game = game
+        this.radius = radius
+        this.vector = new Point(centerPoint)
+        this.xAxisReferencePoint = new Point(centerPoint)
+        this.yAxisReferencePoint = new Point(centerPoint)
+        this.normalEndPoint = new Point()
+        this.xAxisReferencePoint.x += radius
+        this.yAxisReferencePoint.y += radius
+        this.setNormal()
+        this.setEllipseParameters()
+        this.stroke = 5
+        this.alpha = 1.0
+        this.fillFace = this.strokeColor
+        this.fillBack = undefined
+        this.markedForDel = false;
+        this.rotationAxis = {x:0.5,y:1,z:0}
+        
+    }
+
+    get strokeColor(){ return `rgba(128,128,128,${this.alpha})`}
+
+    update(){
+        this.rotate({x:0,y:500,z:500}, this.rotationAxis, 0.01)
+        this.rotate(this.vector, this.normalVector, 0.05)
+    }
+
+    setNormal(){
+        const v1 = vectorFromPoints(this.vector,this.xAxisReferencePoint)
+        const v2 = vectorFromPoints(this.vector,this.yAxisReferencePoint)
+        this.normalVector = changeVectorLength(crossProduct(v1,v2),100)
+        this.normalEndPoint.copyCoords(addVectors(this.vector,this.normalVector))
+    }
+
+    rotate(rotationCenter, rotationAxis, angle){
+        this.vector.copyCoords( rotatePointAroundPoint(this.vector, rotationCenter, rotationAxis, angle))
+        this.xAxisReferencePoint.copyCoords( rotatePointAroundPoint(this.xAxisReferencePoint, rotationCenter, rotationAxis, angle))
+        this.yAxisReferencePoint.copyCoords( rotatePointAroundPoint(this.yAxisReferencePoint, rotationCenter, rotationAxis, angle))
+        this.setNormal()
+    }
+
+    setEllipseParameters(){
+        const normalAngle2D = Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
+        this.ellipseAngle = normalAngle2D - (Math.sign(normalAngle2D) * Math.PI/2)
+        this.ellipseMajorRadius = this.radius * this.vector.perspectiveScale
+        this.angleOfVisibility = angleBetweenVectors(this.vector.visionVector, this.normalVector)
+        this.ellipseMinorRadius = this.ellipseMajorRadius * Math.abs(Math.cos(this.angleOfVisibility))
+    }
+    draw(ctx){
+        const sides = Math.floor((this.radius / 3) * this.vector.perspectiveScale) + 5
+        let angleStep = Math.PI * 2 / sides
+        const point = new Point()
+        point.copyCoords(this.yAxisReferencePoint)
+        
+        ctx.strokeStyle = this.strokeColor
+        ctx.lineWidth = this.stroke
+        ctx.beginPath()
+        ctx.moveTo(point.cX, point.cY)
+
+        console.log(angleStep, sides)
+        for (let i = 0; i < sides; i++) {
+            if (i === sides-1) angleStep *= 1.1
+            const nextPoint = rotatePointAroundPoint(point, this.vector, this.normalVector, angleStep)
+            point.copyCoords(nextPoint)
+            ctx.lineTo(point.cX, point.cY)
+        }
+
+        ctx.stroke()
+        ctx.closePath()
+
+        ctx.beginPath()
+        ctx.moveTo(this.vector.cX, this.vector.cY)
+        ctx.lineTo(this.xAxisReferencePoint.cX, this.xAxisReferencePoint.cY)
+        ctx.strokeStyle = 'red'
+        ctx.stroke()
+        ctx.closePath()
+        ctx.beginPath()
+        ctx.moveTo(this.vector.cX, this.vector.cY)
+        ctx.lineTo(this.yAxisReferencePoint.cX, this.yAxisReferencePoint.cY)
+        ctx.strokeStyle = 'blue'
+        ctx.stroke()
+        ctx.closePath()
+        ctx.beginPath()
+        ctx.moveTo(this.vector.cX, this.vector.cY)
+        ctx.lineTo(this.normalEndPoint.cX, this.normalEndPoint.cY)
+        ctx.strokeStyle = 'green'
+        ctx.stroke()
+        ctx.closePath()
+
+    }
+    draw_old(ctx){
+        if (this.vector.z < 100 )this.alpha = round(this.alpha - 0.1, 2)
+        this.fillFace = this.strokeColor
+        if (this.alpha < 0.1) this.markedForDel = true    
+        
+        this.setEllipseParameters()
+        ctx.beginPath()
+        const clockwise = false //this.angleOfVisibility > 1.571 ? true : false
+        ctx.ellipse(this.vector.cX, this.vector.cY, this.ellipseMajorRadius,
+            this.ellipseMinorRadius, this.ellipseAngle, 0, Math.PI*2, clockwise)
+        if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
+        else ctx.fillStyle = this.fillBack
+        if (this.fillFace) ctx.fill()
+        ctx.strokeStyle = this.strokeColor
+        ctx.lineWidth = this.stroke * this.vector.perspectiveScale
+        ctx.stroke()
+        ctx.closePath()
+
+        
+
+        
+    }
+    drawShadow(){}
+    
+}
 
 class Circle {
     constructor(game, radius, centerPoint, angleXZ, angleZY){
@@ -854,10 +1046,15 @@ class Circle {
        this.fillBack = undefined
        this.normalEndPoint = new Point(addVectors(this.vector, this.normalVector)) 
     }
-    get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z + 100} }
+    get visionVector(){ return {x:this.vector.x, y:this.vector.y - Game.height, z:this.vector.z + 100} } // adding 100 to vision vector depth, correct later but right now makes effect better  
 
+    // need to change this calc so that when circle is in full size, its angle is 90 not 0, so that the wheel
+    // isnt spinning and squishing turned sideways (its only spinning if its unsqushing the same amount)
     get rotationAngle() {
-        return 1.571 + Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
+        //const normalAngle2D = Math.atan2((this.vector.cY - this.normalEndPoint.cY) , (this.vector.cX - this.normalEndPoint.cX))
+        const normalAngle2D = Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
+        const ellipseAngle = normalAngle2D - (Math.sign(normalAngle2D) * Math.PI/2)
+        return ellipseAngle
     }
     get normalVector(){ 
         const updatedNormal = {
@@ -867,7 +1064,6 @@ class Circle {
         }
         if (this.normalEndPoint) this.normalEndPoint.copyCoords(addVectors(this.vector, updatedNormal))
         return updatedNormal
-        
     }
     
     get angleOfVisibility(){ return angleBetweenVectors(this.visionVector, this.normalVector)}
@@ -886,7 +1082,7 @@ class Circle {
         
         const drawCircle = () => {
             ctx.beginPath()
-            const clockwise = this.angleOfVisibility > 1.571 ? true : false
+            const clockwise = false //this.angleOfVisibility > 1.571 ? true : false
             ctx.ellipse(this.vector.cX, this.vector.cY, this.cameraRadius,
                 this.cameraMinorRadius, this.rotationAngle, 0, Math.PI*2, clockwise)
             if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
@@ -925,7 +1121,57 @@ class Circle {
     }
     
     drawShadow(){}
-    
+}
+
+class SpokedWheel extends Circle {
+    constructor(game, radius, centerPoint, angleXZ, angleZY){
+        super(game, radius, centerPoint, angleXZ, angleZY)
+    }
+    draw(ctx){
+        super.draw(ctx)
+        
+        const b = this.cameraRadius 
+        const a = this.cameraMinorRadius 
+        const ellipseAngle = this.rotationAngle
+        const angles = [0 + ellipseAngle] // Math.PI/2 - ellipseAngle, Math.PI - ellipseAngle, -Math.PI/2  - ellipseAngle]
+        const ellipseRadii = []
+        const pointsOnRotatedEllipse = []
+
+        
+
+        for (let i = 0; i < angles.length; i++) {
+            const sineTheta = Math.sin(angles[i])
+            const cosTheta = Math.cos(angles[i])
+
+            ellipseRadii.push ( (a * b) / (Math.sqrt(
+                Math.pow(a,2) * Math.pow(sineTheta,2) + Math.pow(b,2) * Math.pow(cosTheta,2)
+            )) )
+            
+            
+            // let xSign;
+            // let ySign;
+            // if (num > 0 && num < Math.PI/2) {
+            //     xSign = 1
+            //     ySign = 1
+            // if (num > Math.PI/2 && num < Math.PI)
+
+            pointsOnRotatedEllipse[i] = {
+                x: (Math.cos(angles[i]) * ellipseRadii[i]) + this.vector.cX,
+                y: (Math.sin(angles[i]) * ellipseRadii[i]) + this.vector.cY
+            }
+
+            ctx.beginPath()
+            ctx.moveTo(this.vector.cX,this.vector.cY)
+            ctx.lineTo(pointsOnRotatedEllipse[i].x,pointsOnRotatedEllipse[i].y)
+            ctx.stroke()
+            ctx.closePath()
+
+            // if (this.isFirstWheel){
+            //     console.log(angles[0], ellipseRadii[0], Math.cos(angles[0]), Math.sin(angles[0]))
+            //     }
+        }
+
+    }
 }
 
 class BowlingBall extends GameObj{
@@ -1278,6 +1524,23 @@ class SoundEffect {
     }
 }
 
+//enemy class needs the schedudling system built into it
+// array is indexed around the frame count of the game, filled with a marker that the player will need to block or attack
+// when new enemies spawn in they look for gaps in the array to and test if they 
+// attack scheduling can be partially overwritten by another enemies block or attack timings, so long as a player attack can be fit into the schedule
+// this is because the attack window is bigger than the player needs to perform the attack
+// e.g., enemy 2 will try to schedule a block during enemy 1's attacking phase, it will then check if the if time between a start-up and active frame window 
+// can fit inside the remaining attack window, if it can it, schedules in a recovery time for the player to reel back from attacking before they can block again
+// enemies may still attempt to schedule in blocks/attacks,checking first if the attack can be pushed further forward (and still overlap with attack timing)
+// and if that fails, scheduling itself after the player attacks.
+// this will produce predictable results based on the player speed, unless some gap time is added randomly
+// adding in chunks of un-schedulable time will mean sometimes the timing are mixed up, on whether the player must try to sneak in a quick attack before blocking the next enemy, 
+// or must wait to block both enemies before getting a last second attack on the first enemy
+// this can be made difficult because its not essential for the player to attack every enemy, allthough it will be *possible*
+// to prove this the system will be able to send inputs to the player based on its scheduling, so the game can play itself to gaurentee timings are possible. 
+
+// the most difficult part of this is probably getting the player attack scheduling to be dynamic, so it can move anywhere within its allotted time to best accomdate enemy scheduling. 
+
 class Enemy extends GameObj{
     static enemies = []
     constructor(game, image, basePoint){
@@ -1398,7 +1661,7 @@ class CannonWielder extends Enemy {
         this.vector.mass = 3
         this.vector.groundFriction = 0.03
         this.createCannon()
-        this.relativeSpeed = -8
+        
     }
     createCannon(){
         
@@ -1407,38 +1670,41 @@ class CannonWielder extends Enemy {
         this.cannonAngles = [0,3*Math.PI/2]
 
         const wheels = [
-            this.wheelOne = new Circle(this.game,100,{x:0,y:0,z:0},0,0),
-            this.wheelTwo = new Circle(this.game,100,{x:0,y:0,z:0},0,0)
+            this.wheelOne = new SpokedWheel(this.game,100,{x:0,y:0,z:0},0,0),
+            this.wheelTwo = new SpokedWheel(this.game,100,{x:0,y:0,z:0},0,0)
         ]
         for (let i = 0; i < wheels.length; i++) {
             wheels[i].stroke = 15
             wheels[i].strokeColor = '#723C07'
         }
+        this.wheelOne.isFirstWheel = true
+        this.wheelOne.strokeColor = 'blue'
 
         this.newFront = new Circle(this.game,40,{x:0,y:500,z:30},0,0)
         this.newFront.stroke = 12
         this.newFront.strokeColor = 'grey'
         this.newFront.fillFace = 'grey'
         this.newFront.fillBack = 'black'
-        
-        //this.testLine = new Line(this.game,this.cannonBack.vector,this.newFront.vector)
         this.game.activeObjects.push(this.newFront)
-        //this.game.activeObjects.push(this.testLine)
 
     }
     update(input){
+
+        // test cannon front angle
+        // console.log("normal angle to eyes: ",round(this.newFront.angleOfVisibility,2)," ellipse rotation angle: ",round(this.newFront.rotationAngle,2),
+        // "angles: ",round(this.newFront.angleXZ % 6.28,2),round(this.newFront.angleZY % 6.28,2))
+
         super.update()
         if (this.shotCooldown > 0) this.shotCooldown -= 1;
-
         
         let directionVector = changeVectorLength(
             {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},5 + 15 * Math.abs(Math.cos(this.cannonAngles[0])))
 
         let movement = {x:0,y:0,z:0}
-        if (input.includes('up')) this.cannonAngles[0] += Math.PI/30
-        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/30
-        if (input.includes('right')) this.cannonAngles[1] += Math.PI/30
-        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/30
+        if (input.includes('up')) this.cannonAngles[0] += Math.PI/100
+        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/100
+        if (input.includes('right')) this.cannonAngles[1] += Math.PI/100
+        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/100
         if (input.includes('arrowUp')) movement = addVectors(movement,directionVector)
         if (input.includes('arrowDown')) movement = vectorFromPoints(directionVector,movement)
         if (input.includes('arrowRight')) movement.x += 10
@@ -1481,6 +1747,12 @@ class CannonWielder extends Enemy {
 
             
     }
+    // to draw the spokes in the wheels: 
+    // https://math.stackexchange.com/questions/22064/calculating-a-point-that-lies-on-an-ellipse-given-an-angle
+    // bottom answer here shows how to find x and y coords for a line from the center to the edge of a rotated ellipse
+    // using the circumferance of the circle, change the starting angle for the spokes based on the velocty vector
+    // e.g. if velocity is 10, and circumferance is 40, then starting angle would change by 90 degrees, one quarter of circle. 
+    // from starting add a spoke every 72 degrees for 5 rotating spokes.
     draw(ctx){
         super.draw(ctx)
         ctx.strokeStyle = 'grey'
@@ -1522,7 +1794,7 @@ class CannonWielder extends Enemy {
             ctx.fillStyle = 'grey'
             ctx.fill()
             ctx.closePath()
-        } 
+        }
         if (this.wheelOne.angleOfVisibility > 1.571) {
             this.wheelTwo.draw(ctx)
             drawCannonBack()
@@ -1695,15 +1967,15 @@ class Blocking extends PlayerState {
         this.updateLane();
     }
     update(inputs){
+        
         let input = inputs[inputs.length-1]
-        if (!input || (inputs.includes('a') && inputs.includes('d'))) input = 'middle'
+        if (!input || ((inputs.includes('left') && inputs.includes('right')))) input = 'middle'
         this.sprite.image.fadeAlpha(0.2)
         
         if (input === 'attack' && this.damageRecoveryEffect < 20){
             this.player.changeState("attacking")
             return;
         }
-        else if ( ! (Object.keys(this.frameDestinations).includes(input)) ) return;
         if (--this.inputDelayCounter >= 0 || this.frameDestinations[input] === undefined) input = this.lastInput
         if (input !== this.lastInput) {
             this.inputDelayCounter = 4;
