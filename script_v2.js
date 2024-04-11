@@ -18,6 +18,7 @@ canvas.height = 800;
 canvas2.width = 1000
 canvas2.height = 800
 canvas.style.aspectRatio = 1/0.8
+ctx.lineJoin = "round";
 
 
 
@@ -138,6 +139,12 @@ function rotatePointAroundPoint(point, center, axis, angle) {
     };
 }
 
+const solveQuadratic = (a,b,c) => {
+	const discriminant = Math.pow(b,2) - 4*a*c
+	const divisor = 2*a
+	return [(-b + Math.sqrt(discriminant)) / divisor, (-b - Math.sqrt(discriminant)) / divisor] 
+}
+
 const getMousePosition = (event, element) => { 
     let rect = element.getBoundingClientRect(); 
     let x = (event.clientX - rect.left) * (1000/ rect.width); 
@@ -246,7 +253,7 @@ class Game {
         this.state.enter();
         this.activeObjects.push(new CannonWielder(this,{x:0,y:500,z:400}))
         //this.activeObjects.push(new Line(this,{x:100,y:300,z:-300},{x:-1000,y:900,z:3000}))
-        this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:900}))
+        //this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:1500}))
         
     }
     update(timestamp, keyRecord, touchRecord){
@@ -675,9 +682,7 @@ class GameObj {
         ctx.drawImage(shadowImg, Math.floor((this.centerX-width*0.5)+0.5), y, Math.floor(width+0.5), Math.floor(height+0.5))
     }
     addPhysics(){
-        console.log(this.vector)
         const newPoint = new PhysicsPoint()
-        console.log(newPoint)
         newPoint.copyCoords(this.vector)
         this.vector = newPoint
     }
@@ -912,12 +917,8 @@ class Line {
 
 }
 
-// multiple issues with this new circle test:
-// the secondary points arent linked together in translations, only in rotations (can tie both to some hierachy of points)
-
-
 class CircleTest {
-    constructor(game, radius, centerPoint, angleXZ = 0, angleY = 0){ //circle created, then angles applied as rotation 
+    constructor(game, radius, centerPoint){
         this.game = game
         this.radius = radius
         this.vector = new Point(centerPoint)
@@ -927,21 +928,18 @@ class CircleTest {
         this.xAxisReferencePoint.x += radius
         this.yAxisReferencePoint.y += radius
         this.setNormal()
-        this.setEllipseParameters()
-        this.stroke = 5
-        this.alpha = 1.0
-        this.fillFace = this.strokeColor
+        this.stroke = 10
+        this.strokeColor = 'black'
+        this.fillFace = undefined
         this.fillBack = undefined
         this.markedForDel = false;
         this.rotationAxis = {x:0.5,y:1,z:0}
-        
+        this.willDrawReferenceLines = true;
+        this.spokes = 0;
+        this.connectedPoints = [this.vector, this.xAxisReferencePoint, this.yAxisReferencePoint]
     }
 
-    get strokeColor(){ return `rgba(128,128,128,${this.alpha})`}
-
     update(){
-        this.rotate({x:0,y:500,z:500}, this.rotationAxis, 0.01)
-        this.rotate(this.vector, this.normalVector, 0.05)
     }
 
     setNormal(){
@@ -951,86 +949,108 @@ class CircleTest {
         this.normalEndPoint.copyCoords(addVectors(this.vector,this.normalVector))
     }
 
-    rotate(rotationCenter, rotationAxis, angle){
-        this.vector.copyCoords( rotatePointAroundPoint(this.vector, rotationCenter, rotationAxis, angle))
-        this.xAxisReferencePoint.copyCoords( rotatePointAroundPoint(this.xAxisReferencePoint, rotationCenter, rotationAxis, angle))
-        this.yAxisReferencePoint.copyCoords( rotatePointAroundPoint(this.yAxisReferencePoint, rotationCenter, rotationAxis, angle))
+    move(translationVector){
+        this.connectedPoints.forEach( point => {
+            point.copyCoords(addVectors(point, translationVector))
+        })
         this.setNormal()
     }
 
-    setEllipseParameters(){
-        const normalAngle2D = Math.atan((this.vector.cY - this.normalEndPoint.cY) / (this.vector.cX - this.normalEndPoint.cX))
-        this.ellipseAngle = normalAngle2D - (Math.sign(normalAngle2D) * Math.PI/2)
-        this.ellipseMajorRadius = this.radius * this.vector.perspectiveScale
-        this.angleOfVisibility = angleBetweenVectors(this.vector.visionVector, this.normalVector)
-        this.ellipseMinorRadius = this.ellipseMajorRadius * Math.abs(Math.cos(this.angleOfVisibility))
+    moveTo(newCenterPosition){
+        const translationVector = vectorFromPoints(this.vector, newCenterPosition)
+        this.move(translationVector)
     }
+
+    rotate(rotationCenter, rotationAxis, angle){
+        this.connectedPoints.forEach( point => {
+            point.copyCoords( rotatePointAroundPoint(point, rotationCenter, rotationAxis, angle) )
+        })
+        this.setNormal()
+    }
+
     draw(ctx){
-        const sides = Math.floor((this.radius / 3) * this.vector.perspectiveScale) + 5
+        //set the canvas settings (using visiblity angle to determine which face of the circle we are seeing)
+        ctx.strokeStyle = this.strokeColor
+        ctx.lineWidth = this.stroke * this.vector.perspectiveScale
+        const angleOfVisibility = angleBetweenVectors(this.vector.visionVector, this.normalVector)
+        const fillColor = angleOfVisibility < Math.PI/2 ? this.fillBack : this.fillFace
+
+        //divide the circle into sides, create point to track rotation
+        const sides = Math.floor((this.radius) * Math.sqrt(this.vector.perspectiveScale))
         let angleStep = Math.PI * 2 / sides
         const point = new Point()
         point.copyCoords(this.yAxisReferencePoint)
         
-        ctx.strokeStyle = this.strokeColor
-        ctx.lineWidth = this.stroke
+        this.polygonPoints = []
         ctx.beginPath()
         ctx.moveTo(point.cX, point.cY)
-
-        console.log(angleStep, sides)
         for (let i = 0; i < sides; i++) {
             if (i === sides-1) angleStep *= 1.1
             const nextPoint = rotatePointAroundPoint(point, this.vector, this.normalVector, angleStep)
             point.copyCoords(nextPoint)
             ctx.lineTo(point.cX, point.cY)
+            this.polygonPoints.push([point.cX,point.cY])
         }
-
         ctx.stroke()
+        if (fillColor) {
+            ctx.fillStyle = fillColor
+            ctx.fill()
+        }
         ctx.closePath()
 
-        ctx.beginPath()
-        ctx.moveTo(this.vector.cX, this.vector.cY)
-        ctx.lineTo(this.xAxisReferencePoint.cX, this.xAxisReferencePoint.cY)
-        ctx.strokeStyle = 'red'
-        ctx.stroke()
-        ctx.closePath()
-        ctx.beginPath()
-        ctx.moveTo(this.vector.cX, this.vector.cY)
-        ctx.lineTo(this.yAxisReferencePoint.cX, this.yAxisReferencePoint.cY)
-        ctx.strokeStyle = 'blue'
-        ctx.stroke()
-        ctx.closePath()
-        ctx.beginPath()
-        ctx.moveTo(this.vector.cX, this.vector.cY)
-        ctx.lineTo(this.normalEndPoint.cX, this.normalEndPoint.cY)
-        ctx.strokeStyle = 'green'
-        ctx.stroke()
-        ctx.closePath()
-
+        //rotated around again, drawing spokes
+        const spokeInterval = this.spokes > 0? Math.PI*2 / this.spokes : 0
+        ctx.lineWidth = this.stroke * (2/3) * this.vector.perspectiveScale
+        point.copyCoords(this.yAxisReferencePoint)
+        const {cX, cY} = this.vector
+        for (let i = 0; i < this.spokes; i++) {
+            ctx.beginPath()
+            ctx.moveTo(cX, cY)
+            const nextPoint = rotatePointAroundPoint(point, this.vector, this.normalVector, spokeInterval)
+            point.copyCoords(nextPoint)
+            ctx.lineTo(point.cX, point.cY)
+            ctx.lineTo(cX, cY)
+            ctx.stroke()
+            ctx.closePath()
+        }
+        if (this.willDrawReferenceLines) this.drawReferenceLines()
     }
-    draw_old(ctx){
-        if (this.vector.z < 100 )this.alpha = round(this.alpha - 0.1, 2)
-        this.fillFace = this.strokeColor
-        if (this.alpha < 0.1) this.markedForDel = true    
-        
-        this.setEllipseParameters()
-        ctx.beginPath()
-        const clockwise = false //this.angleOfVisibility > 1.571 ? true : false
-        ctx.ellipse(this.vector.cX, this.vector.cY, this.ellipseMajorRadius,
-            this.ellipseMinorRadius, this.ellipseAngle, 0, Math.PI*2, clockwise)
-        if (this.angleOfVisibility < 1.571) ctx.fillStyle = this.fillFace
-        else ctx.fillStyle = this.fillBack
-        if (this.fillFace) ctx.fill()
-        ctx.strokeStyle = this.strokeColor
-        ctx.lineWidth = this.stroke * this.vector.perspectiveScale
-        ctx.stroke()
-        ctx.closePath()
-
-        
-
-        
+    drawReferenceLines(){
+        const referenceLines = [[this.xAxisReferencePoint,'green'], [this.yAxisReferencePoint, 'blue'], [this.normalEndPoint, 'red']]
+        referenceLines.sort((a,b) => b[0].z - a[0].z)
+        const x = this.vector.cX
+        const y = this.vector.cY
+        referenceLines.forEach( e => {
+            ctx.beginPath()
+            ctx.moveTo(x, y)
+            ctx.lineTo(e[0].cX, e[0].cY)
+            ctx.strokeStyle = e[1]
+            ctx.stroke()
+            ctx.closePath()
+        })
     }
     drawShadow(){}
-    
+}
+
+class Sphere extends CircleTest{
+    constructor(game, radius, centerPoint){
+        super(game, radius, centerPoint)
+    }
+    draw(ctx){
+        const radius = this.radius * this.vector.perspectiveScale
+
+        ctx.strokeStyle = this.strokeColor
+        ctx.fillStyle = this.fillFace
+        ctx.lineWidth = this.stroke * this.vector.perspectiveScale
+        
+        ctx.beginPath()
+        ctx.arc(this.vector.cX, this.vector.cY, radius, 0, Math.PI*2)
+        ctx.stroke()
+        ctx.fill()
+        ctx.closePath()
+
+        if (this.willDrawReferenceLines) this.drawReferenceLines()
+    }
 }
 
 class Circle {
@@ -1123,56 +1143,6 @@ class Circle {
     drawShadow(){}
 }
 
-class SpokedWheel extends Circle {
-    constructor(game, radius, centerPoint, angleXZ, angleZY){
-        super(game, radius, centerPoint, angleXZ, angleZY)
-    }
-    draw(ctx){
-        super.draw(ctx)
-        
-        const b = this.cameraRadius 
-        const a = this.cameraMinorRadius 
-        const ellipseAngle = this.rotationAngle
-        const angles = [0 + ellipseAngle] // Math.PI/2 - ellipseAngle, Math.PI - ellipseAngle, -Math.PI/2  - ellipseAngle]
-        const ellipseRadii = []
-        const pointsOnRotatedEllipse = []
-
-        
-
-        for (let i = 0; i < angles.length; i++) {
-            const sineTheta = Math.sin(angles[i])
-            const cosTheta = Math.cos(angles[i])
-
-            ellipseRadii.push ( (a * b) / (Math.sqrt(
-                Math.pow(a,2) * Math.pow(sineTheta,2) + Math.pow(b,2) * Math.pow(cosTheta,2)
-            )) )
-            
-            
-            // let xSign;
-            // let ySign;
-            // if (num > 0 && num < Math.PI/2) {
-            //     xSign = 1
-            //     ySign = 1
-            // if (num > Math.PI/2 && num < Math.PI)
-
-            pointsOnRotatedEllipse[i] = {
-                x: (Math.cos(angles[i]) * ellipseRadii[i]) + this.vector.cX,
-                y: (Math.sin(angles[i]) * ellipseRadii[i]) + this.vector.cY
-            }
-
-            ctx.beginPath()
-            ctx.moveTo(this.vector.cX,this.vector.cY)
-            ctx.lineTo(pointsOnRotatedEllipse[i].x,pointsOnRotatedEllipse[i].y)
-            ctx.stroke()
-            ctx.closePath()
-
-            // if (this.isFirstWheel){
-            //     console.log(angles[0], ellipseRadii[0], Math.cos(angles[0]), Math.sin(angles[0]))
-            //     }
-        }
-
-    }
-}
 
 class BowlingBall extends GameObj{
     constructor(game, point = {x:0,y:0,z:0}){
@@ -1648,171 +1618,225 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
     
 }
 
+
+
 class CannonWielder extends Enemy {
     constructor(game, basePoint){
         const alive = new GameImage(...Bowman.imageParams.unloaded)
         super (game, alive ,basePoint)
         this.image.height = 0
         this.shotCooldown = 0
-        this.addPhysics()
-        this.vector.borders.y = [30,undefined]
-        this.vector.borders.z = [0,2000]
-        this.vector.bounceDampening = 0.9
-        this.vector.mass = 3
-        this.vector.groundFriction = 0.03
         this.createCannon()
         
     }
     createCannon(){
+        //new cannon parts creation
         
-        this.cannonBack = new GameObj(this.game, new GameImage(undefined,250,250),{x:0,y:0,z:400})
+        const cannonLength = 400
+        const baseRadius = 125
+        this.cannonBase = new Sphere(this.game, baseRadius, {x:0,y:baseRadius,z:0})
+        this.cannonBase.fillFace = 'grey'
+        this.cannonBase.strokeColor = 'dimgray'
         
-        this.cannonAngles = [0,3*Math.PI/2]
+        
 
-        const wheels = [
-            this.wheelOne = new SpokedWheel(this.game,100,{x:0,y:0,z:0},0,0),
-            this.wheelTwo = new SpokedWheel(this.game,100,{x:0,y:0,z:0},0,0)
-        ]
-        for (let i = 0; i < wheels.length; i++) {
-            wheels[i].stroke = 15
-            wheels[i].strokeColor = '#723C07'
-        }
-        this.wheelOne.isFirstWheel = true
-        this.wheelOne.strokeColor = 'blue'
+        this.cannonEnd = new CircleTest(this.game,40,{x: 0, y: cannonLength, z: 0})
+        this.cannonEnd.rotate(this.cannonEnd.vector,{x:1,y:0,z:0},-Math.PI/2)
+        this.cannonEnd.stroke = 12
+        this.cannonEnd.strokeColor = 'grey'
+        //this.cannonEnd.fillFace = 'black'
+        //this.cannonEnd.fillBack = 'grey'
+        
+        
+        this.wheelOne = new CircleTest(this.game,100,{x: baseRadius, y: baseRadius - 30, z: 0})
+        this.wheelTwo = new CircleTest(this.game,100,{x: -baseRadius, y: baseRadius - 30, z: 0})
+        const arr = [this.wheelOne, this.wheelTwo].forEach( e => {
+            e.stroke = 14
+            e.strokeColor = '#723C07'
+            e.spokes = 8
+            e.willDrawReferenceLines = false
+        })
+        this.wheelOne.rotate(this.wheelOne.vector, {x:0,y:1,z:0}, -Math.PI/2)
+        this.wheelTwo.rotate(this.wheelTwo.vector, {x:0,y:1,z:0}, Math.PI/2)
 
-        this.newFront = new Circle(this.game,40,{x:0,y:500,z:30},0,0)
-        this.newFront.stroke = 12
-        this.newFront.strokeColor = 'grey'
-        this.newFront.fillFace = 'grey'
-        this.newFront.fillBack = 'black'
-        this.game.activeObjects.push(this.newFront)
-
+        this.game.activeObjects.push(...[this.wheelOne,this.wheelTwo,this.cannonBase,this.cannonEnd])
     }
     update(input){
-
-        // test cannon front angle
-        // console.log("normal angle to eyes: ",round(this.newFront.angleOfVisibility,2)," ellipse rotation angle: ",round(this.newFront.rotationAngle,2),
-        // "angles: ",round(this.newFront.angleXZ % 6.28,2),round(this.newFront.angleZY % 6.28,2))
-
         super.update()
         if (this.shotCooldown > 0) this.shotCooldown -= 1;
         
-        let directionVector = changeVectorLength(
-            {x:this.newFront.normalVector.x, y:0, z:this.newFront.normalVector.z},5 + 15 * Math.abs(Math.cos(this.cannonAngles[0])))
-
+        let directionVector = changeVectorLength({
+                x:this.cannonEnd.normalVector.x, 
+                y:0, 
+                z:this.cannonEnd.normalVector.z
+        }, 10)
+        
         let movement = {x:0,y:0,z:0}
-        if (input.includes('up')) this.cannonAngles[0] += Math.PI/100
-        if (input.includes('down')) this.cannonAngles[0] -= Math.PI/100
-        if (input.includes('right')) this.cannonAngles[1] += Math.PI/100
-        if (input.includes('left')) this.cannonAngles[1] -= Math.PI/100
-        if (input.includes('arrowUp')) movement = addVectors(movement,directionVector)
-        if (input.includes('arrowDown')) movement = vectorFromPoints(directionVector,movement)
-        if (input.includes('arrowRight')) movement.x += 10
-        if (input.includes('arrowLeft')) movement.x -= 10
+        let movementDirection = 1
+        let yAxisRotation = 0
+        let xzAxisRotation = 0
+        if (input.includes('up'))  xzAxisRotation += Math.PI/50
+        if (input.includes('down'))  xzAxisRotation -= Math.PI/50
+        if (input.includes('right'))  yAxisRotation -= Math.PI/50
+        if (input.includes('left'))  yAxisRotation += Math.PI/50
+        if (input.includes('arrowUp')) movement = directionVector
+        if (input.includes('arrowDown')) movement = directionVector, movementDirection = -1
         if (input.includes('attack')) this.shoot();
         
-        this.vector.x += movement.x
-        this.vector.y += movement.y
-        this.vector.z += movement.z
-
-        this.cannonBack.vector.copyCoords(this.vector)
-
-        this.newFront.angleXZ = this.cannonAngles[1]
-        this.newFront.angleZY = this.cannonAngles[0]
-
-        const cannonBackCenter = vectorDeepCopy(this.cannonBack.vector)
-        cannonBackCenter.y += this.cannonBack.image.height/2
+        this.vector.x += movement.x * movementDirection
+        this.vector.y += movement.y * movementDirection
+        this.vector.z += movement.z * movementDirection
         
-        const longerNormal = changeVectorLength(this.newFront.normalVector,300)
-        const newFrontPos = addVectors(cannonBackCenter,longerNormal)
+        const pieces = [
+            this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo
+        ]
 
-        this.newFront.vector.copyCoords(newFrontPos)
+        const movementMagnitude = vectorMagnitude(movement)
+        if (movementMagnitude != 0) {
+            const wheelCircumference =  2 * Math.PI * this.wheelOne.radius 
+            const arr = [this.wheelOne, this.wheelTwo].forEach( wheel => {
+                const rotationAmount = (movementMagnitude / wheelCircumference) * Math.PI * 2 * movementDirection
+                wheel.rotate(this.wheelOne.vector, this.wheelOne.normalVector, -rotationAmount)
+            })
+        }
+
+        pieces.forEach( piece => {
+            piece.move({
+                x: movement.x * movementDirection, 
+                y: movement.y * movementDirection,
+                z: movement.z * movementDirection
+            })
+            if (yAxisRotation != 0) piece.rotate(this.cannonBase.vector, {x:0,y:1,z:0}, yAxisRotation)
+        })
         
-        
-
-        const offCenterAdjustment = 50
-
-        this.wheelOne.angleXZ = this.newFront.angleXZ + 1.571
-        const wheelOneVector = addVectors(cannonBackCenter,changeVectorLength(this.wheelOne.normalVector,125))
-        wheelOneVector.y -= offCenterAdjustment
-        this.wheelOne.vector.copyCoords(wheelOneVector)
-
-        this.wheelTwo.angleXZ = this.newFront.angleXZ - 1.571
-        const wheelTwoVector = addVectors(cannonBackCenter,changeVectorLength(this.wheelTwo.normalVector,125))
-        wheelTwoVector.y -= offCenterAdjustment
-        this.wheelTwo.vector.copyCoords(wheelTwoVector)
-
-        // this.testLine.p1 = cannonBackCenter
-        // this.testLine.p2 = newFrontPos
-
-            
+        if (xzAxisRotation != 0) {
+            const xzAxisRotationAxis = vectorFromPoints(this.cannonBase.vector, this.cannonBase.xAxisReferencePoint)
+            this.cannonBase.rotate(this.cannonBase.vector, xzAxisRotationAxis, xzAxisRotation)
+            this.cannonEnd.rotate(this.cannonBase.vector, xzAxisRotationAxis, xzAxisRotation)
+        }
     }
-    // to draw the spokes in the wheels: 
-    // https://math.stackexchange.com/questions/22064/calculating-a-point-that-lies-on-an-ellipse-given-an-angle
-    // bottom answer here shows how to find x and y coords for a line from the center to the edge of a rotated ellipse
-    // using the circumferance of the circle, change the starting angle for the spokes based on the velocty vector
-    // e.g. if velocity is 10, and circumferance is 40, then starting angle would change by 90 degrees, one quarter of circle. 
-    // from starting add a spoke every 72 degrees for 5 rotating spokes.
+    
     draw(ctx){
         super.draw(ctx)
-        ctx.strokeStyle = 'grey'
-        let radius2 = this.cannonBack.dw/2
-        const drawCannonBack = () => {
-            ctx.beginPath();
-            ctx.arc(this.cannonBack.centerX, this.cannonBack.centerY, this.cannonBack.dw/2, 0, 2 * Math.PI, false);
-            ctx.fillStyle = 'grey'
-            ctx.fill()
-            ctx.strokeStyle = 'dimgrey'
-            ctx.lineWidth = 3 * this.cannonBack.perspectiveScale
+        if (!this.cannonEnd.polygonPoints) return
+        this.drawCannonBarrel(ctx)
+        
+    }
+    drawCannonBarrel(ctx){
+        //finding point and tangent line between circle to two points on cannon end polygon
+        
+        //loop over polygon points to find the crimped edges of the polygon (points most perpendicular to the line connecting end to base in 2D)
+        const points = this.cannonEnd.polygonPoints
+        let furthestPoint = {pointIndex:-1,length:0}
+        const cannonEndCenter = [this.cannonEnd.vector.cX, this.cannonEnd.vector.cY]
+        
+        //finds point fursthest from the center(ish) of the polygon
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const delta = Math.pow(p[0]-cannonEndCenter[0],2) + Math.pow(p[1]-cannonEndCenter[1],2)
+            if (delta > furthestPoint.length) {
+                furthestPoint.pointIndex = i
+                furthestPoint.length = delta
+            }
+        }
+        const point1 = points[furthestPoint.pointIndex]
+
+        //run loop again to find point furthest from the first point 
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            const delta = Math.pow(p[0]-point1[0],2) + Math.pow(p[1]-point1[1],2)
+            if (delta > furthestPoint.length) {
+                furthestPoint.pointIndex = i
+                furthestPoint.length = delta
+            }
+        }
+        const point2 = points[furthestPoint.pointIndex]
+        
+        // draw line to test
+        ctx.beginPath()
+        ctx.moveTo(point1[0],point1[1])
+        ctx.lineTo(point2[0],point2[1])
+        ctx.stroke()
+
+        
+        const tangentLineConnectionPoints = () => {
+
+            const radius = this.cannonBase.radius*this.cannonBase.vector.perspectiveScale
+            const circleCenterPoint = [this.cannonBase.vector.cX, this.cannonBase.vector.cY]
+            
+            // center the circle on the origin
+            const p1 = [point1[0]-circleCenterPoint[0], point1[1]-circleCenterPoint[1]]
+            const p2 = [point2[0]-circleCenterPoint[0], point2[1]-circleCenterPoint[1]]
+
+            const getSlopes = (point, radius) => {
+                //slopes of both tangent lines between a point and a circle, defined by radius, centered at [0,0]
+                //from forumla of a line-from-known-point and formula for finding the perpendicular distance of a point from a line
+                const a = Math.pow(point[0],2) - Math.pow(radius,2)
+                const b = -2 * point[0] * point[1]
+                const c = Math.pow(point[1],2) - Math.pow(radius,2)
+                return solveQuadratic(a,b,c)
+            }
+            const p1TangentSlopes = getSlopes(p1, radius)
+            const p2TangentSlopes = getSlopes(p2, radius)
+            
+
+            const tangentLineConnectionPoint = (slope, point, radius) => {
+                // using same translated point, assuming cricle at [0,0]
+                //increase the circle radius by small amount, to make up for small imprecision
+                //result is tangent as two roots, but close enough in value
+                const r = radius + 0.1 
+                const m = slope
+                const x1 = point[0]
+                const y1 = point[1]
+                const c1 = m * x1  - y1
+                const a = Math.pow(m,2) + 1
+                const b = -2 * m * c1
+                const c = Math.pow(c1,2) - Math.pow(r,2)
+                let x = solveQuadratic(a,b,c)[0]
+                let y = (m * x) - (m * x1) + y1  //plug x back in original line formula
+                return [x,y]
+            }
+            const p1ConnectionPoints = [
+                tangentLineConnectionPoint(p1TangentSlopes[0], p1, radius),  
+                tangentLineConnectionPoint(p1TangentSlopes[1], p1, radius)
+            ]
+            const p2ConnectionPoints = [
+                tangentLineConnectionPoint(p2TangentSlopes[0], p2, radius),  
+                tangentLineConnectionPoint(p2TangentSlopes[1], p2, radius)
+            ]
+
+            //values to translate back to original position 
+            const xAdjust = circleCenterPoint[0]
+            const yAdjust = circleCenterPoint[1]
+
+            ctx.beginPath()
+            ctx.strokeStyle = 'purple'
+            ctx.lineWidth = 5
+            ctx.moveTo(p1ConnectionPoints[0][0] + xAdjust, p1ConnectionPoints[0][1] + yAdjust)
+            ctx.lineTo(point1[0], point1[1])
+            ctx.lineTo(p1ConnectionPoints[1][0] + xAdjust, p1ConnectionPoints[1][1] + yAdjust)
             ctx.stroke()
-            ctx.closePath();
+            ctx.closePath()
+          
+            ctx.beginPath()
+            ctx.strokeStyle = 'cyan'
+            ctx.moveTo(p2ConnectionPoints[0][0] + xAdjust, p2ConnectionPoints[0][1] + yAdjust)
+            ctx.lineTo(point2[0], point2[1])
+            ctx.lineTo(p2ConnectionPoints[1][0] + xAdjust, p2ConnectionPoints[1][1] + yAdjust)
+            ctx.stroke()
+            ctx.closePath()
+
         }
         
-        const drawCannonBarrel = () => {
-            const frontRotation = this.newFront.rotationAngle
-            const frontRadius = this.newFront.cameraRadius
-            
-            let p1 = {}
-            let p2 = {}
-            let p3 = {}
-            let p4 = {}
-
-            p1.x = this.newFront.vector.cX + (Math.cos(frontRotation) * frontRadius * 1.1) 
-            p1.y = this.newFront.vector.cY + (Math.sin(frontRotation) * frontRadius * 1.1)
-            p2.x = this.newFront.vector.cX - (Math.cos(frontRotation) * frontRadius * 1.1)
-            p2.y = this.newFront.vector.cY - (Math.sin(frontRotation) * frontRadius * 1.1)
-            p3.x = this.cannonBack.centerX + (Math.cos(frontRotation) * radius2)
-            p3.y = this.cannonBack.centerY + (Math.sin(frontRotation) * radius2)
-            p4.x = this.cannonBack.centerX - (Math.cos(frontRotation) * radius2)
-            p4.y = this.cannonBack.centerY - (Math.sin(frontRotation) * radius2)
-            ctx.beginPath()
-            ctx.moveTo(p1.x, p1.y)
-            ctx.lineTo(p3.x,p3.y)
-            ctx.lineTo(p4.x,p4.y)
-            ctx.lineTo(p2.x, p2.y)
-            ctx.lineTo(p1.x,p1.y)
-            ctx.fillStyle = 'grey'
-            ctx.fill()
-            ctx.closePath()
-        }
-        if (this.wheelOne.angleOfVisibility > 1.571) {
-            this.wheelTwo.draw(ctx)
-            drawCannonBack()
-            drawCannonBarrel()
-            this.wheelOne.draw(ctx)
-        } else {
-            this.wheelOne.draw(ctx)
-            drawCannonBack()
-            drawCannonBarrel()
-            this.wheelTwo.draw(ctx)
-        }
+        tangentLineConnectionPoints()
     }
+    
     shoot(){
         if (this.shotCooldown > 0) return;
         else this.shotCooldown = 15
         const ball = new BowlingBall(this.game,{x:0,y:0,z:0})
-        ball.vector.copyCoords(this.newFront.vector)
-        ball.vector.velocity = changeVectorLength((vectorFromPoints(this.cannonBack.centralVector, this.newFront.vector)),randomInt(50,60)) 
+        ball.vector.copyCoords(this.cannonEnd.vector)
+        ball.vector.velocity = changeVectorLength(this.cannonEnd.normalVector,randomInt(50,60)) 
         this.game.activeObjects.push(ball)
         this.vector.velocity = {x:ball.vector.velocity.x * -0.6,y:ball.vector.velocity.y * -0.6,z:ball.vector.velocity.z * -0.6, }
     }
