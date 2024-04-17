@@ -5,11 +5,17 @@ const canvas = document.getElementById("canvas1");
 const canvas2 = document.createElement("canvas")
 const pauseMenu = document.getElementById("pauseMenu")
 const canvasContainer = document.getElementById("canvas-container")
+const joyContainer = document.getElementById("joystick-container")
+const joystickKnob = document.getElementById("joystick-knob")
 const resumeButton = document.getElementById("resume-btn")
 const startButton = document.getElementById("start-btn")
 const ctx = canvas.getContext('2d',{ alpha: false });
 const keyRecord = [];
 const touchRecord = {};
+let joystickBoundingRect = {}
+let joystickKnobBoundingRect = {}
+let joystickKnobRelativePos = [0,0]
+let joystickTouchID;
 let spritesLoaded = 0;
 startButton.innerHTML = `Loading`
 
@@ -21,9 +27,8 @@ canvas.style.aspectRatio = 1/0.8
 ctx.lineJoin = "round";
 
 
-
 //cheats+testing --- normal settings for all is false
-const loadBlankSprites = true
+const loadBlankSprites = true;
 let gameMuted = false;
 let disableEnemyDamage = true;
 let showElementsAtAnyDistance = false;
@@ -105,7 +110,7 @@ const pointInRectangle = function(x,y,w,h,x2,y2){
 }
 
 function rotatePointAroundPoint(point, center, axis, angle) {
-    // Translate the point to the origin,
+    // Translate the point to the origin, store values in array in standard x,y,z order
     let translatedPoint = [
         point.x - center.x,
         point.y - center.y,
@@ -131,7 +136,7 @@ function rotatePointAroundPoint(point, center, axis, angle) {
             ((1 - cosAngle) * normalizedAxis[1] * normalizedAxis[2] + normalizedAxis[0] * sinAngle) * translatedPoint[1] +
             (cosAngle + (1 - cosAngle) * normalizedAxis[2] * normalizedAxis[2]) * translatedPoint[2];
 
-    
+    // return as key/value pairs 
     return {
         x : x + center.x,
         y : y + center.y,
@@ -141,14 +146,13 @@ function rotatePointAroundPoint(point, center, axis, angle) {
 
 const solveQuadratic = (a,b,c) => {
 	const discriminant = Math.pow(b,2) - 4*a*c
-	const divisor = 2*a
-	return [(-b + Math.sqrt(discriminant)) / divisor, (-b - Math.sqrt(discriminant)) / divisor] 
+	return [(-b + Math.sqrt(discriminant)) / (2*a), (-b - Math.sqrt(discriminant)) / (2*a)] 
 }
 
 const getMousePosition = (event, element) => { 
     let rect = element.getBoundingClientRect(); 
-    let x = (event.clientX - rect.left) * (1000/ rect.width); 
-    let y = (event.clientY - rect.top) * (1000/ rect.width); 
+    let x = (event.clientX - rect.left) * (canvas.width/ rect.width); 
+    let y = (event.clientY - rect.top) * (canvas.height/ rect.height); 
     return {x:x, y:y}
 } 
 
@@ -160,7 +164,7 @@ loadSprites().then( (bitmaps) => {
         startButton.innerHTML = "Start Game"
         startButton.addEventListener('click',() => {   
         startButton.classList.add("disabled")
-        canvas.requestFullscreen().then(newGame(bitmaps)); 
+        canvasContainer.requestFullscreen().then(newGame(bitmaps)); 
         console.log('%c Debug options: enter db.sounds(), db.damage(), db.motion(), db.fog() ', 
         'background: #222; color: #bada55')
     })
@@ -178,8 +182,12 @@ function animate(timestamp, game){
     })
 }
 
+
+// key and touch listeners 
+//------------------------
+
 resumeButton.addEventListener('click', () => {
-    canvas.requestFullscreen();
+    canvasContainer.requestFullscreen();
     resumeButton.classList.add("disabled")
 })
 
@@ -201,23 +209,83 @@ document.addEventListener("touchstart", e => {
             x: [touch.pageX],
             y: [touch.pageY]
         }
+        
     })
 })
+
 document.addEventListener("touchmove", e => {
     [...e.changedTouches].forEach(touch => {
+        updateJoystickPosition(touch)
         const id = touch.identifier 
         touchRecord[`touch${id}`].x.push(touch.pageX) 
         touchRecord[`touch${id}`].y.push(touch.pageY)  
         })
     })
+
 document.addEventListener("touchend", e => {
-    let id = [...e.changedTouches][0].identifier
-    delete touchRecord[`touch${id}`]
+    [...e.changedTouches].forEach((touch) => {
+        let id = touch.identifier
+        if (id === joystickTouchID){
+            joystickTouchID = undefined
+            updateJoystickPosition()
+            joystickKnob.style.transition = "top 100ms, left 100ms"
+        }
+        delete touchRecord[`touch${id}`]
+    })
+    
 })
 
-//notes on perspective: need to play with it more, considering add a margin at the bottom (lowering every 2d y value from some amount)
-// other option is just squish the 1x1 ratio of the canvas, raising the floor shrinking the perspective overall
-// third option, leave as is now and just increase the size of the elements to fit it better and make the player seem smaller. 
+joyContainer.addEventListener("touchstart", (e) => {
+    const touch = e.targetTouches[0] 
+    if (joystickTouchID === undefined) joystickTouchID = touch.identifier
+    updateJoystickPosition(touch)
+    joystickKnob.style.transition = "top 0s, left 0s" 
+})
+window.onresize = (e) => {
+    updateJoystickDimensions()
+}
+
+const updateJoystickPosition = (touch) => {
+    let touchPosRelative;
+    if (!touch) {
+        joystickKnobRelativePos = [0,0]
+        touchPosRelative = [0,0]
+    }
+    else {
+        if (touch.identifier != joystickTouchID) return;
+        touchPosRelative = [
+            touch.pageX - joystickBoundingRect.centerPoint[0],
+            touch.pageY - joystickBoundingRect.centerPoint[1]
+        ]
+    }
+    const radius = joystickBoundingRect.radius
+    let boundingMulitplier = 1
+    let joystickDistance = vectorMagnitude({x:touchPosRelative[0], y:touchPosRelative[1], z:0})
+    if (joystickDistance > radius) boundingMulitplier = radius / joystickDistance
+    joystickKnobRelativePos[0] = touchPosRelative[0] / radius * boundingMulitplier
+    joystickKnobRelativePos[1] = touchPosRelative[1] / radius * boundingMulitplier
+    const knobRadius = joystickKnobBoundingRect.width * 0.5
+    const radiusAsPercentage = (knobRadius / joystickBoundingRect.width) * 100
+    const leftOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[0]) * 50)
+    const topOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[1]) * 50)
+    joystickKnob.style.left = Math.floor(leftOffsetPercent) + "%"
+    joystickKnob.style.top = Math.floor(topOffsetPercent) + "%"
+}
+
+const updateJoystickDimensions = () => {
+    joystickBoundingRect = joyContainer.getBoundingClientRect()
+    joystickKnobBoundingRect = joystickKnob.getBoundingClientRect()
+    joystickKnobBoundingRect.radius = joystickKnobBoundingRect.width/2
+    joystickBoundingRect.radius = joystickBoundingRect.width/2
+    joystickBoundingRect.centerPoint = [
+        joystickBoundingRect.x + joystickBoundingRect.radius,
+        joystickBoundingRect.y + joystickBoundingRect.radius
+    ]
+    updateJoystickPosition()
+}
+
+updateJoystickDimensions()
+
 
 
 class Game {
@@ -401,7 +469,11 @@ class Playing extends GameState {
         this.game.activeObjects.forEach((e)=>e.update(input))
         
         this.game.activeObjects = this.game.activeObjects.filter((e)=>!e.markedForDel)
-        this.game.activeObjects.sort((a,b)=> b.vector.z - a.vector.z)
+        this.game.activeObjects.sort((a,b)=> {
+            const v1 = vectorMagnitude(b.vector.visionVector) * Math.sign(b.vector.z)
+            const v2 = vectorMagnitude(a.vector.visionVector) * Math.sign(a.vector.z)
+            return v1 - v2
+            })
         this.draw(this.ctx);   
     }
     testProjectile(){
@@ -488,18 +560,27 @@ class GameCompletion extends GameState {
     }
 }
 
-//note to self: finish implementing onto circle and line classes, 
-// take another look at the draw class maybe put that back in the GameObj class
-// rename GameObj to better reflect its role for raster image based elements in the scene
-// make the projectile class and (optional) add on for Point class (since physics is done on the point only)
-// custom projectiles like bowling ball will be a GameObj, with a Point with Point.phyics preset with particular parameters
-
 class Point { 
     constructor(coords = {x:0,y:0,z:0}){
         this._x = coords.x 
         this._y = coords.y 
         this._z = coords.z 
         this.updateCamera()
+        this.parentPoint = undefined
+        this.dependentPoints = []
+        // must setup rotation dependency as well, 
+        // even dependent points may not be rotation dependent on every axis
+        // if a parent point is rotated on a point outside itself, then every dependent point 
+        // down the chain will rotate around that same point
+        // but if any object has a free axis of rotation (like a wheel) then it will ignore 
+        // rotation requests from up the dependency chain only on that axis
+        // so I need to be sure that that the wheel will know a rotation matches its free axis
+        // meaning: the line made from the center of rotation and the axis of rotation, if
+        // continued would line up with the center point and axis of rotation for the wheel
+        // substract center points to make line between, check if that line between is some multiple
+        // of both rotation axis (divide x/vx, z/v1x etc.. and should get two sets of 3 identical ratios)
+        // (or 0.001 close to identical cause of small fractions and whatnot)
+        
     }
 
     get x(){ return this._x }
@@ -510,10 +591,26 @@ class Point {
     set y(num){ this._y = num, this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)}
     set z(num){ this._z = num, this.updateCamera() }
 
+    //fix vision vector at some point to get rid of arbitray +100
     get visionVector(){ return { x: this._x, y: this._y - Game.height, z: this._z + 100 } }
 
+    
     update(){
 
+    }
+    move(coords, parentPoint){
+        if (parentPoint !== this.parentPoint) return;
+        this._x += coords.x || 0
+        this._y += coords.y || 0
+        this._z += coords.z || 0
+        this.updateCamera()
+        this.dependentPoints.forEach( (point) => {
+            point.move(coords, this)
+        })
+    }
+    moveTo(coords, parentPoint){
+        const translationVector = vectorFromPoints(this, coords)
+        this.move(translationVector, parentPoint)
     }
     updateCamera(){ 
         this.perspectiveScale = 1 - ((this._z) / (this._z + Game.height))
@@ -525,6 +622,15 @@ class Point {
         this._x = point.x
         this._y = point.y
         this.updateCamera() 
+    }
+    linkDependentPoints(){
+        for (let i = 0; i < arguments.length; i++) {
+            if (arguments[i] instanceof Point) {
+                this.dependentPoints.push(arguments[i])
+                arguments[i].parentPoint = this
+            }
+        }
+        console.log(this.dependentPoints)
     }
     getCoords(){}
 }
@@ -699,6 +805,7 @@ class InputHandler {
     readInput(keyRecord, touchRecord){
         if (Object.keys(touchRecord).length === 0) return this.readKeyboardInput(keyRecord)
         else return this.readTouchInput(touchRecord)
+        
     }
     readKeyboardInput(keyRecord){
         let input = []
@@ -714,18 +821,23 @@ class InputHandler {
         return input
     }
     readTouchInput(touchRecord){
-        const touch0 = touchRecord.touch0
-        const touch1 = touchRecord.touch1
-        const lastTouch = touch1 || touch0
-        const lastTouchX = lastTouch.x[lastTouch.x.length-1]
-        let input = 'middle'
-        if (lastTouchX < window.innerWidth/3) input = 'left'
-        if (lastTouchX > window.innerWidth*(2/3)) input = 'right'
-        if (touchRecord.touch0 && touchRecord.touch1) input = 'middle'
-        if ((touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) ||
-            (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)) input = 'attack'
+        // const touch0 = touchRecord.touch0
+        // const touch1 = touchRecord.touch1
+        // const lastTouch = touch1 || touch0
+        // const lastTouchX = lastTouch.x[lastTouch.x.length-1]
+        // let input = 'middle'
+        // if (lastTouchX < window.innerWidth/3) input = 'left'
+        // if (lastTouchX > window.innerWidth*(2/3)) input = 'right'
+        // if (touchRecord.touch0 && touchRecord.touch1) input = 'middle'
+        // if ((touch0 && touch0.y[touch0.y.length-2] - touch0.y[touch0.y.length-1] > 15) ||
+        //     (touch1 && touch1.y[touch1.y.length-2] - touch1.y[touch1.y.length-1] > 15)) input = 'attack'
+        // return input
+        let input = ['middle']
+        if (joystickKnobRelativePos[0] > 0.15) input.push('right')
+        if (joystickKnobRelativePos[0] < -0.15) input.push('left')
         return input
     }
+
 }
 
 class StatsHandler {
@@ -918,7 +1030,7 @@ class Line {
 }
 
 class CircleTest {
-    constructor(game, radius, centerPoint){
+    constructor(game, radius, centerPoint, strokeSize = 10, strokeColor = 'black',  fillColor){
         this.game = game
         this.radius = radius
         this.vector = new Point(centerPoint)
@@ -928,15 +1040,16 @@ class CircleTest {
         this.xAxisReferencePoint.x += radius
         this.yAxisReferencePoint.y += radius
         this.setNormal()
-        this.stroke = 10
-        this.strokeColor = 'black'
-        this.fillFace = undefined
-        this.fillBack = undefined
+        this.stroke = strokeSize
+        this.strokeColor = strokeColor
+        this.fillFace = fillColor
+        this.fillBack = fillColor
         this.markedForDel = false;
         this.rotationAxis = {x:0.5,y:1,z:0}
-        this.willDrawReferenceLines = true;
+        this.willDrawReferenceLines = false;
         this.spokes = 0;
-        this.connectedPoints = [this.vector, this.xAxisReferencePoint, this.yAxisReferencePoint]
+        this.vector.linkDependentPoints(this.xAxisReferencePoint, this.yAxisReferencePoint)
+        this.connectionPoints = [this.vector, this.xAxisReferencePoint, this.yAxisReferencePoint]
     }
 
     update(){
@@ -950,7 +1063,7 @@ class CircleTest {
     }
 
     move(translationVector){
-        this.connectedPoints.forEach( point => {
+        this.connectionPoints.forEach( point => {
             point.copyCoords(addVectors(point, translationVector))
         })
         this.setNormal()
@@ -962,7 +1075,7 @@ class CircleTest {
     }
 
     rotate(rotationCenter, rotationAxis, angle){
-        this.connectedPoints.forEach( point => {
+        this.connectionPoints.forEach( point => {
             point.copyCoords( rotatePointAroundPoint(point, rotationCenter, rotationAxis, angle) )
         })
         this.setNormal()
@@ -1033,8 +1146,8 @@ class CircleTest {
 }
 
 class Sphere extends CircleTest{
-    constructor(game, radius, centerPoint){
-        super(game, radius, centerPoint)
+    constructor(game, radius, centerPoint, strokeSize, strokeColor, fillColor){
+        super(game, radius, centerPoint, strokeSize, strokeColor, fillColor)
     }
     draw(ctx){
         const radius = this.radius * this.vector.perspectiveScale
@@ -1626,6 +1739,7 @@ class CannonWielder extends Enemy {
         super (game, alive ,basePoint)
         this.image.height = 0
         this.shotCooldown = 0
+        this.joystickVector = {x:0,y:0}
         this.createCannon()
         
     }
@@ -1634,77 +1748,80 @@ class CannonWielder extends Enemy {
         
         const cannonLength = 400
         const baseRadius = 125
-        this.cannonBase = new Sphere(this.game, baseRadius, {x:0,y:baseRadius,z:0})
-        this.cannonBase.fillFace = 'grey'
-        this.cannonBase.strokeColor = 'dimgray'
-        
-        
 
-        this.cannonEnd = new CircleTest(this.game,40,{x: 0, y: cannonLength, z: 0})
+        this.cannonBase = new Sphere(this.game, baseRadius, {x:0,y:baseRadius,z:0},  10, 'grey', 'grey')
+
+        this.cannonEnd = new CircleTest(this.game,30,{x: 0, y: cannonLength, z: 0}, 16, 'grey', 'black')
+        this.cannonEnd.fillBack = 'grey'
+        
+        // create wheels
+        this.wheelOne = new CircleTest(this.game, 100, {x: baseRadius, y: baseRadius - 30, z: 0},
+            14, '#723C07')
+        this.wheelTwo = new CircleTest(this.game, 100, {x: -baseRadius, y: baseRadius - 30, z: 0},
+            14, '#723C07')
+        this.wheelOne.spokes = this.wheelTwo.spokes = 8
+        
+        //set default rotations 
         this.cannonEnd.rotate(this.cannonEnd.vector,{x:1,y:0,z:0},-Math.PI/2)
-        this.cannonEnd.stroke = 12
-        this.cannonEnd.strokeColor = 'grey'
-        //this.cannonEnd.fillFace = 'black'
-        //this.cannonEnd.fillBack = 'grey'
-        
-        
-        this.wheelOne = new CircleTest(this.game,100,{x: baseRadius, y: baseRadius - 30, z: 0})
-        this.wheelTwo = new CircleTest(this.game,100,{x: -baseRadius, y: baseRadius - 30, z: 0})
-        const arr = [this.wheelOne, this.wheelTwo].forEach( e => {
-            e.stroke = 14
-            e.strokeColor = '#723C07'
-            e.spokes = 8
-            e.willDrawReferenceLines = false
-        })
         this.wheelOne.rotate(this.wheelOne.vector, {x:0,y:1,z:0}, -Math.PI/2)
         this.wheelTwo.rotate(this.wheelTwo.vector, {x:0,y:1,z:0}, Math.PI/2)
 
+        //establish point links for translations
+        this.vector.linkDependentPoints(this.cannonBase.vector)
+        this.cannonBase.vector.linkDependentPoints(this.cannonEnd.vector, 
+            this.wheelOne.vector, this.wheelTwo.vector
+        );
+        
         this.game.activeObjects.push(...[this.wheelOne,this.wheelTwo,this.cannonBase,this.cannonEnd])
     }
     update(input){
         super.update()
         if (this.shotCooldown > 0) this.shotCooldown -= 1;
-        
-        let directionVector = changeVectorLength({
-                x:this.cannonEnd.normalVector.x, 
-                y:0, 
-                z:this.cannonEnd.normalVector.z
-        }, 10)
-        
+  
         let movement = {x:0,y:0,z:0}
-        let movementDirection = 1
         let yAxisRotation = 0
         let xzAxisRotation = 0
+
+        // read keyboard input
         if (input.includes('up'))  xzAxisRotation += Math.PI/50
         if (input.includes('down'))  xzAxisRotation -= Math.PI/50
-        if (input.includes('right'))  yAxisRotation -= Math.PI/50
-        if (input.includes('left'))  yAxisRotation += Math.PI/50
-        if (input.includes('arrowUp')) movement = directionVector
-        if (input.includes('arrowDown')) movement = directionVector, movementDirection = -1
         if (input.includes('attack')) this.shoot();
         
-        this.vector.x += movement.x * movementDirection
-        this.vector.y += movement.y * movementDirection
-        this.vector.z += movement.z * movementDirection
+        //read joystick input
+        const newJoystickVector = {x:joystickKnobRelativePos[0],y:joystickKnobRelativePos[1]}
+        const newJoystickAngle = Math.atan2(newJoystickVector.y * -1, newJoystickVector.x) 
+        const currentCannonAngle = Math.atan2(this.cannonBase.normalVector.z, this.cannonBase.normalVector.x) 
+        const angleDifference = (newJoystickAngle - currentCannonAngle)
+        const newJoystickMagnitude = Math.sqrt(Math.pow(newJoystickVector.x,2) + Math.pow(newJoystickVector.y,2))
         
+        if (newJoystickMagnitude > 0.01){
+            movement.x = 15 * newJoystickVector.x
+            movement.z = -15 * newJoystickVector.y
+            if (Math.abs(angleDifference) > Math.PI/32)yAxisRotation = -angleDifference
+        }
+
+        this.vector.x += movement.x
+        this.vector.z += movement.z
+
         const pieces = [
             this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo
         ]
 
+        //spin wheels according to forward movement
         const movementMagnitude = vectorMagnitude(movement)
         if (movementMagnitude != 0) {
             const wheelCircumference =  2 * Math.PI * this.wheelOne.radius 
             const arr = [this.wheelOne, this.wheelTwo].forEach( wheel => {
-                const rotationAmount = (movementMagnitude / wheelCircumference) * Math.PI * 2 * movementDirection
+                const rotationAmount = (movementMagnitude / wheelCircumference) * Math.PI * 2
                 wheel.rotate(this.wheelOne.vector, this.wheelOne.normalVector, -rotationAmount)
             })
         }
 
         pieces.forEach( piece => {
             piece.move({
-                x: movement.x * movementDirection, 
-                y: movement.y * movementDirection,
-                z: movement.z * movementDirection
+                x: movement.x, 
+                y: movement.y,
+                z: movement.z
             })
             if (yAxisRotation != 0) piece.rotate(this.cannonBase.vector, {x:0,y:1,z:0}, yAxisRotation)
         })
@@ -1778,7 +1895,8 @@ class CannonWielder extends Enemy {
             }
             const p1TangentSlopes = getSlopes(p1, radius)
             const p2TangentSlopes = getSlopes(p2, radius)
-            
+            const comparisionSlope = Math.abs((cannonEndCenter[1] - circleCenterPoint[1]) / (cannonEndCenter[0] - circleCenterPoint[0]))
+        
 
             const tangentLineConnectionPoint = (slope, point, radius) => {
                 // using same translated point, assuming cricle at [0,0]
@@ -1805,26 +1923,38 @@ class CannonWielder extends Enemy {
                 tangentLineConnectionPoint(p2TangentSlopes[1], p2, radius)
             ]
 
+            let p1OuterTangentPoint = p1ConnectionPoints[0]
+            let p2OuterTangentPoint = p2ConnectionPoints[0]
+        
+            const testVector = vectorFromPoints({x:p2[0],y:p2[1],z:0},{x:p1[0],y:p1[1],z:0})
+            const testConnectPoint = {x:p1ConnectionPoints[0][0],y:p1ConnectionPoints[0][1],z:0}
+            const testTangent = vectorFromPoints({x:p1[0],y:p1[1],z:0},testConnectPoint)
+            const testAngle = angleBetweenVectors(testVector,testTangent)
+            if (testAngle > Math.PI/2) p1OuterTangentPoint = p1ConnectionPoints[1]
+           
+            const testVector2 = vectorFromPoints({x:p1[0],y:p1[1],z:0},{x:p2[0],y:p2[1],z:0})
+            const testConnectPoint2 = {x:p2ConnectionPoints[0][0],y:p2ConnectionPoints[0][1],z:0}
+            const testTangent2 = vectorFromPoints({x:p2[0],y:p2[1],z:0},testConnectPoint2)
+            const testAngle2 = angleBetweenVectors(testVector2,testTangent2)
+            if (testAngle2 > Math.PI/2) p2OuterTangentPoint = p2ConnectionPoints[1]
+
+           
+
             //values to translate back to original position 
             const xAdjust = circleCenterPoint[0]
             const yAdjust = circleCenterPoint[1]
 
             ctx.beginPath()
-            ctx.strokeStyle = 'purple'
-            ctx.lineWidth = 5
-            ctx.moveTo(p1ConnectionPoints[0][0] + xAdjust, p1ConnectionPoints[0][1] + yAdjust)
-            ctx.lineTo(point1[0], point1[1])
-            ctx.lineTo(p1ConnectionPoints[1][0] + xAdjust, p1ConnectionPoints[1][1] + yAdjust)
-            ctx.stroke()
-            ctx.closePath()
-          
-            ctx.beginPath()
-            ctx.strokeStyle = 'cyan'
-            ctx.moveTo(p2ConnectionPoints[0][0] + xAdjust, p2ConnectionPoints[0][1] + yAdjust)
+            ctx.moveTo(point1[0], point1[1])
+            ctx.lineTo(p1OuterTangentPoint[0] + xAdjust, p1OuterTangentPoint[1] + yAdjust)
+            ctx.lineTo(p2OuterTangentPoint[0] + xAdjust, p2OuterTangentPoint[1] + yAdjust)
             ctx.lineTo(point2[0], point2[1])
-            ctx.lineTo(p2ConnectionPoints[1][0] + xAdjust, p2ConnectionPoints[1][1] + yAdjust)
+            ctx.fillStyle = 'grey'
+            ctx.lineWidth = this.vector.perspectiveScale * 10
+            ctx.strokeStyle = 'grey'
             ctx.stroke()
-            ctx.closePath()
+            ctx.fill()
+           
 
         }
         
@@ -2028,6 +2158,17 @@ class Blocking extends PlayerState {
             this.frameQueue = this.frameQueue.filter((e) => e < this.middleSkipRange[0] || e > this.middleSkipRange[1])
         }
     }
+    // rewriting the frame queue system for mobile, to tie the frame displayed closer to x pos of joystick
+    // --- letting go of the stick, or returning to the center buffer ring, will play the normal reset animation queue
+    // put moving the joystick out of the buffer will instantly skip the middle skip range and snap the sword position to 
+    // last frame before earlyFramesToSkip,
+    // the earlyFramesToSkip would play only if the end frame of the queue is the last frame, and the start frame is not within that
+    // side already (past the middle skip frame). The issue is that the end frame queue will update constantly unless some buffer is put between different
+    // updates. E.g., if joystick.x = 0.9 (90 percent  pulled to the right), and the buffer zone is 0.1, then all the block animation frames 
+    // destinations are distrubuted over that 0.8 range. if theres ~ 8 frames of animation between the middle range and the ending ease frames
+    // then the frame destination (and frame queue) will only update on changes of .1 or more from joystick.x
+    // so if joystick is moved fast, frame updates will lag behind joystick pos enough to tell the frame queue to add some ending animation to it,
+    // in the form of the earlyFramesToSkip  
     updateLane(){
         if (this.inputDelayCounter > 0) return
         let lane = "middle"
