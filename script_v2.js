@@ -9,6 +9,8 @@ const joyContainer = document.getElementById("joystick-container")
 const joystickKnob = document.getElementById("joystick-knob")
 const resumeButton = document.getElementById("resume-btn")
 const startButton = document.getElementById("start-btn")
+const attackButton = document.getElementById("atk-button")
+
 const ctx = canvas.getContext('2d',{ alpha: false });
 const keyRecord = [];
 const touchRecord = {};
@@ -17,6 +19,7 @@ let joystickKnobBoundingRect = {}
 let joystickKnobRelativePos = [0,0]
 let joystickTouchID;
 let spritesLoaded = 0;
+let attackButtonPressed = false;
 startButton.innerHTML = `Loading`
 
 canvas.width = 1000;
@@ -209,7 +212,6 @@ document.addEventListener("touchstart", e => {
             x: [touch.pageX],
             y: [touch.pageY]
         }
-        
     })
 })
 
@@ -241,6 +243,19 @@ joyContainer.addEventListener("touchstart", (e) => {
     updateJoystickPosition(touch)
     joystickKnob.style.transition = "top 0s, left 0s" 
 })
+
+attackButton.addEventListener("touchstart", (e) => {
+    attackButtonPressed = true;
+    attackButton.classList.add("pressed")
+    console.log(attackButtonPressed)
+})
+attackButton.addEventListener("touchend", (e) => {
+    attackButtonPressed = false;
+    attackButton.classList.remove("pressed")
+    console.log(attackButtonPressed)
+})
+
+
 window.onresize = (e) => {
     updateJoystickDimensions()
 }
@@ -266,8 +281,8 @@ const updateJoystickPosition = (touch) => {
     joystickKnobRelativePos[1] = touchPosRelative[1] / radius * boundingMulitplier
     const knobRadius = joystickKnobBoundingRect.width * 0.5
     const radiusAsPercentage = (knobRadius / joystickBoundingRect.width) * 100
-    const leftOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[0]) * 50)
-    const topOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[1]) * 50)
+    const leftOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[0]) * 40)
+    const topOffsetPercent = 50 - radiusAsPercentage + ((joystickKnobRelativePos[1]) * 40)
     joystickKnob.style.left = Math.floor(leftOffsetPercent) + "%"
     joystickKnob.style.top = Math.floor(topOffsetPercent) + "%"
 }
@@ -319,7 +334,7 @@ class Game {
                         gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
-        this.activeObjects.push(new CannonWielder(this,{x:0,y:500,z:400}))
+        this.activeObjects.push(new CannonWielder(this,{x:0,y:0,z:400}))
         //this.activeObjects.push(new Line(this,{x:100,y:300,z:-300},{x:-1000,y:900,z:3000}))
         //this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:1500}))
         
@@ -593,7 +608,6 @@ class Point {
 
     //fix vision vector at some point to get rid of arbitray +100
     get visionVector(){ return { x: this._x, y: this._y - Game.height, z: this._z + 100 } }
-
     
     update(){
 
@@ -618,6 +632,7 @@ class Point {
         this.cY = Game.bottomY - (this._z * this.perspectiveScale) - (this._y * this.perspectiveScale)
     }
     copyCoords(point){
+        // not a translation, so doesn't respect linked points 
         this._z = point.z
         this._x = point.x
         this._y = point.y
@@ -640,7 +655,6 @@ class PhysicsPoint extends Point{
         this.velocity = {x:0,y:0,z:0}
         this.force = {x:0,y:-2,z:0} //-2 default to represent gravity
         this.borders = {x:[-750,750],y:[0,undefined], z:[undefined,2100]} //[lowerlimit, upper limit]
-        this.rotationSpeed = 0
         this.mass = 1
         this.airFriction = 0.005
         this.groundFriction = 0.05
@@ -669,9 +683,8 @@ class PhysicsPoint extends Point{
             })
         } 
         this.framesActive += 1
-        this.copyCoords(vector)
+        this.moveTo(vector)
         super.update()
-        // this.image.angle += this.rotationSpeed * (Math.PI*2 / this.game.fps)
     }
     collision(vector, axis, borderIndex){
         const {velocity, borders, force} = this
@@ -1076,7 +1089,7 @@ class CircleTest {
 
     rotate(rotationCenter, rotationAxis, angle){
         this.connectionPoints.forEach( point => {
-            point.copyCoords( rotatePointAroundPoint(point, rotationCenter, rotationAxis, angle) )
+            point.copyCoords(rotatePointAroundPoint(point, rotationCenter, rotationAxis, angle) )
         })
         this.setNormal()
     }
@@ -1490,6 +1503,41 @@ class Coin extends Projectile{
     }
 }
 
+class Coin_test extends GameObj {
+    static imageParams = [`./images/coin.png`,55*0.5,42*0.5]
+    static lastSfxValue = 0
+    constructor(game, startPoint) {
+        super(game, new GameImage(...Coin.imageParams), startPoint)
+        this.setSfx()
+        this.addPhysics()
+        this.rotationSpeed = randomValue(-0.5,0.5)
+        this.target = {x: 0, y: 500, z: -300}
+        this.unitVector = unitVector(vectorFromPoints(this.vector,this.target))
+        for (const axis in this.unitVector){
+            this.vector.velocity[axis] = this.unitVector[axis] * randomValue(-2,2)
+            this.vector.force[axis] = this.unitVector[axis] * randomValue(0.7,0.9)
+        }
+        this.vector.velocity.z += this.game.player.moveSpeed
+        this.vector.borders.z[0] = undefined
+    }
+    update(){
+        super.update();
+        this.image.angle += this.rotationSpeed * (Math.PI*2 / this.game.fps)
+        if (this.vector.z < randomValue(-300,-200)) this.image.fadeAlpha(-0.25)
+        if (this.image.alpha <= 0) {
+            this.markedForDel = true;
+            this.sfx.play(); 
+            this.game.stats.coins += 1       
+        }
+    }
+    setSfx(){
+        let num = Math.floor(randomValue(1,6))
+        while(num === Coin.lastSfxValue) { num = Math.floor(randomValue(1,6)) }
+        Coin.lastSfxValue = num
+        this.sfx = new SoundEffect(`./sounds/coins/${num}.mp3`,0.3)
+    }
+}
+
 class FiredArrow extends Projectile {
     static imageSource = './images/fired_arrow_2.png'
     constructor(game, basePoint){
@@ -1635,10 +1683,12 @@ class Enemy extends GameObj{
     }
     spawnCoins(num){
         const startPoint = this.centralVector
+        console.log(this.centralVector)
         startPoint.z -= 150
+        startPoint.x *= 0.9
         const playerPoint = {x: 0, y: 500, z: -400}
         for (let i = 0; i < num; i++) {
-            const coin = new Coin(this.game,startPoint,playerPoint)
+            const coin = new Coin_test(this.game, startPoint)
             this.game.activeObjects.push(coin)
         } 
     }
@@ -1736,35 +1786,48 @@ class Bowman extends Enemy {   //eventually split into states to deal with the l
 class CannonWielder extends Enemy {
     constructor(game, basePoint){
         const alive = new GameImage(...Bowman.imageParams.unloaded)
-        super (game, alive ,basePoint)
+        super (game, alive, basePoint)
+        console.log(this.image)
         this.image.height = 0
         this.shotCooldown = 0
         this.joystickVector = {x:0,y:0}
         this.createCannon()
+        //this.addPhysics()
         
     }
     createCannon(){
-        //new cannon parts creation
         
         const cannonLength = 400
         const baseRadius = 125
+        const wheelAxelOffset = -30
 
-        this.cannonBase = new Sphere(this.game, baseRadius, {x:0,y:baseRadius,z:0},  10, 'grey', 'grey')
+        const baseX = this.vector.x
+        const baseY = this.vector.y
+        const baseZ = this.vector.z - 200
+        
+        //new cannon parts creation
+        this.cannonBase = new Sphere(this.game, baseRadius, {x: baseX, y: baseY + baseRadius, z:baseZ},  10, 'grey', 'grey')
 
-        this.cannonEnd = new CircleTest(this.game,30,{x: 0, y: cannonLength, z: 0}, 16, 'grey', 'black')
+        this.cannonEnd = new CircleTest(this.game,30,{x: baseX, y: baseY + cannonLength, z: baseZ}, 16, 'grey', 'black')
         this.cannonEnd.fillBack = 'grey'
         
         // create wheels
-        this.wheelOne = new CircleTest(this.game, 100, {x: baseRadius, y: baseRadius - 30, z: 0},
+        this.wheelOne = new CircleTest(this.game, 100, {x: baseX + baseRadius, y: baseY + baseRadius + wheelAxelOffset, z: baseZ},
             14, '#723C07')
-        this.wheelTwo = new CircleTest(this.game, 100, {x: -baseRadius, y: baseRadius - 30, z: 0},
+        this.wheelTwo = new CircleTest(this.game, 100, {x: baseX - baseRadius, y: baseY + baseRadius + wheelAxelOffset, z: baseZ},
             14, '#723C07')
         this.wheelOne.spokes = this.wheelTwo.spokes = 8
         
         //set default rotations 
         this.cannonEnd.rotate(this.cannonEnd.vector,{x:1,y:0,z:0},-Math.PI/2)
+        
+        this.cannonBase.rotate(this.cannonBase.vector,{x:1,y:0,z:0}, Math.PI/3)
+        this.cannonEnd.rotate(this.cannonBase.vector,{x:1,y:0,z:0}, Math.PI/3)
+
         this.wheelOne.rotate(this.wheelOne.vector, {x:0,y:1,z:0}, -Math.PI/2)
         this.wheelTwo.rotate(this.wheelTwo.vector, {x:0,y:1,z:0}, Math.PI/2)
+        
+        
 
         //establish point links for translations
         this.vector.linkDependentPoints(this.cannonBase.vector)
@@ -1786,23 +1849,20 @@ class CannonWielder extends Enemy {
         if (input.includes('up'))  xzAxisRotation += Math.PI/50
         if (input.includes('down'))  xzAxisRotation -= Math.PI/50
         if (input.includes('attack')) this.shoot();
+        if (attackButtonPressed) this.shoot();
         
-        //read joystick input
+        //read joystick input for movement + rotation 
         const newJoystickVector = {x:joystickKnobRelativePos[0],y:joystickKnobRelativePos[1]}
         const newJoystickAngle = Math.atan2(newJoystickVector.y * -1, newJoystickVector.x) 
         const currentCannonAngle = Math.atan2(this.cannonBase.normalVector.z, this.cannonBase.normalVector.x) 
         const angleDifference = (newJoystickAngle - currentCannonAngle)
         const newJoystickMagnitude = Math.sqrt(Math.pow(newJoystickVector.x,2) + Math.pow(newJoystickVector.y,2))
-        
         if (newJoystickMagnitude > 0.01){
             movement.x = 15 * newJoystickVector.x
             movement.z = -15 * newJoystickVector.y
-            if (Math.abs(angleDifference) > Math.PI/32)yAxisRotation = -angleDifference
+            if (Math.abs(angleDifference) > Math.PI/32) yAxisRotation = -angleDifference
         }
-
-        this.vector.x += movement.x
-        this.vector.z += movement.z
-
+        this.vector.move(movement)
         const pieces = [
             this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo
         ]
@@ -1817,14 +1877,9 @@ class CannonWielder extends Enemy {
             })
         }
 
-        pieces.forEach( piece => {
-            piece.move({
-                x: movement.x, 
-                y: movement.y,
-                z: movement.z
-            })
-            if (yAxisRotation != 0) piece.rotate(this.cannonBase.vector, {x:0,y:1,z:0}, yAxisRotation)
-        })
+        if (yAxisRotation != 0) {pieces.forEach( piece => {
+            piece.rotate(this.cannonBase.vector, {x:0,y:1,z:0}, yAxisRotation)
+        })}
         
         if (xzAxisRotation != 0) {
             const xzAxisRotationAxis = vectorFromPoints(this.cannonBase.vector, this.cannonBase.xAxisReferencePoint)
@@ -1832,12 +1887,10 @@ class CannonWielder extends Enemy {
             this.cannonEnd.rotate(this.cannonBase.vector, xzAxisRotationAxis, xzAxisRotation)
         }
     }
-    
     draw(ctx){
         super.draw(ctx)
         if (!this.cannonEnd.polygonPoints) return
         this.drawCannonBarrel(ctx)
-        
     }
     drawCannonBarrel(ctx){
         //finding point and tangent line between circle to two points on cannon end polygon

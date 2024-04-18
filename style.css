@@ -57,15 +57,40 @@ canvas{
     left: 10%;
 }
 
+#atk-button {
+    background-image: radial-gradient(rgba(255, 255, 255, 0) 50%, rgb(133, 133, 133), rgb(0, 0, 0) 80%);
+    background-color: rgb(100, 100, 100);
+    border-radius: 50%;
+    position: absolute;
+    bottom: 15%;
+    right: 15%;
+    font-weight: bold;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+}
+
+#atk-button.pressed {
+    background-color: rgb(255, 0, 0);
+}
+
 @media screen and (orientation: landscape){
     #joystick-container{
         width: 18%;
+        aspect-ratio: 1;
+    }
+    #atk-button {
+        width: 9%;
         aspect-ratio: 1;
     }
 }
 @media screen and (orientation: portrait){
     #joystick-container{
         height: 16%;
+        aspect-ratio: 1;
+    }
+    #atk-button {
+        height: 9%;
         aspect-ratio: 1;
     }
 }
