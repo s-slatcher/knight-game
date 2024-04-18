@@ -334,7 +334,7 @@ class Game {
                         gameOver: new GameOver(this), gameCompletion: new GameCompletion(this) }
         this.state = this.states.initializing
         this.state.enter();
-        this.activeObjects.push(new CannonWielder(this,{x:0,y:0,z:400}))
+        this.activeObjects.push(new CannonWielder(this,{x:0,y:100,z:400}))
         //this.activeObjects.push(new Line(this,{x:100,y:300,z:-300},{x:-1000,y:900,z:3000}))
         //this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:1500}))
         
@@ -647,7 +647,9 @@ class Point {
         }
         console.log(this.dependentPoints)
     }
-    getCoords(){}
+    getCoords(){
+        return {x:this.x, y:this.y, z:this.z}
+    }
 }
 class PhysicsPoint extends Point{
     constructor(coords = {x:0,y:0,z:0}){
@@ -1787,12 +1789,12 @@ class CannonWielder extends Enemy {
     constructor(game, basePoint){
         const alive = new GameImage(...Bowman.imageParams.unloaded)
         super (game, alive, basePoint)
-        console.log(this.image)
+        this.addPhysics()
         this.image.height = 0
         this.shotCooldown = 0
         this.joystickVector = {x:0,y:0}
+        this.bounceDampening = 0.75
         this.createCannon()
-        //this.addPhysics()
         
     }
     createCannon(){
@@ -1853,27 +1855,37 @@ class CannonWielder extends Enemy {
         
         //read joystick input for movement + rotation 
         const newJoystickVector = {x:joystickKnobRelativePos[0],y:joystickKnobRelativePos[1]}
-        const newJoystickAngle = Math.atan2(newJoystickVector.y * -1, newJoystickVector.x) 
-        const currentCannonAngle = Math.atan2(this.cannonBase.normalVector.z, this.cannonBase.normalVector.x) 
-        const angleDifference = (newJoystickAngle - currentCannonAngle)
+        const newJoystickAngle = Math.atan2(newJoystickVector.y * -1,newJoystickVector.x)
+        this.cannonBase.setNormal()
+        const cannonDirectionVector = vectorFromPoints(this.cannonBase.vector, this.cannonBase.yAxisReferencePoint)
+        const currentCannonAngle = Math.atan2(
+            cannonDirectionVector.z, cannonDirectionVector.x) 
+        const angleDifference = (currentCannonAngle - newJoystickAngle)
+        
+        console.log(round(newJoystickAngle,2), round(currentCannonAngle,2))
+
         const newJoystickMagnitude = Math.sqrt(Math.pow(newJoystickVector.x,2) + Math.pow(newJoystickVector.y,2))
         if (newJoystickMagnitude > 0.01){
             movement.x = 15 * newJoystickVector.x
             movement.z = -15 * newJoystickVector.y
-            if (Math.abs(angleDifference) > Math.PI/32) yAxisRotation = -angleDifference
+            if (Math.abs(angleDifference) > Math.PI/32) yAxisRotation = angleDifference
         }
-        this.vector.move(movement)
+        
+        if (movement.x + movement.z !== 0) this.vector.velocity = movement
+
         const pieces = [
             this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo
         ]
 
         //spin wheels according to forward movement
-        const movementMagnitude = vectorMagnitude(movement)
+        const movementMagnitude = vectorMagnitude(this.vector.velocity)
+        const rotationDirection = Math.sign(dotProduct(cannonDirectionVector, this.vector.velocity)) * -1
         if (movementMagnitude != 0) {
             const wheelCircumference =  2 * Math.PI * this.wheelOne.radius 
             const arr = [this.wheelOne, this.wheelTwo].forEach( wheel => {
                 const rotationAmount = (movementMagnitude / wheelCircumference) * Math.PI * 2
-                wheel.rotate(this.wheelOne.vector, this.wheelOne.normalVector, -rotationAmount)
+                wheel.rotate(this.wheelOne.vector, this.wheelOne.normalVector, 
+                    rotationAmount * rotationDirection);
             })
         }
 
@@ -1922,11 +1934,6 @@ class CannonWielder extends Enemy {
         }
         const point2 = points[furthestPoint.pointIndex]
         
-        // draw line to test
-        ctx.beginPath()
-        ctx.moveTo(point1[0],point1[1])
-        ctx.lineTo(point2[0],point2[1])
-        ctx.stroke()
 
         
         const tangentLineConnectionPoints = () => {
@@ -1990,9 +1997,7 @@ class CannonWielder extends Enemy {
             const testTangent2 = vectorFromPoints({x:p2[0],y:p2[1],z:0},testConnectPoint2)
             const testAngle2 = angleBetweenVectors(testVector2,testTangent2)
             if (testAngle2 > Math.PI/2) p2OuterTangentPoint = p2ConnectionPoints[1]
-
-           
-
+            
             //values to translate back to original position 
             const xAdjust = circleCenterPoint[0]
             const yAdjust = circleCenterPoint[1]
@@ -2007,7 +2012,6 @@ class CannonWielder extends Enemy {
             ctx.strokeStyle = 'grey'
             ctx.stroke()
             ctx.fill()
-           
 
         }
         
@@ -2021,7 +2025,10 @@ class CannonWielder extends Enemy {
         ball.vector.copyCoords(this.cannonEnd.vector)
         ball.vector.velocity = changeVectorLength(this.cannonEnd.normalVector,randomInt(50,60)) 
         this.game.activeObjects.push(ball)
-        this.vector.velocity = {x:ball.vector.velocity.x * -0.6,y:ball.vector.velocity.y * -0.6,z:ball.vector.velocity.z * -0.6, }
+        this.vector.velocity = {
+            x:ball.vector.velocity.x * -0.3,
+            y:ball.vector.velocity.y * -0.3,
+            z:ball.vector.velocity.z * -0.3, }
     }
 }
 
