@@ -159,7 +159,7 @@ const getMousePosition = (event, element) => {
     return {x:x, y:y}
 } 
 
-
+//creating sprites and game, and main game loop
 //-----------------------
 
 
@@ -184,7 +184,6 @@ function animate(timestamp, game){
         animate(timestamp, game)
     })
 }
-
 
 // key and touch listeners 
 //------------------------
@@ -236,6 +235,9 @@ document.addEventListener("touchend", e => {
     })
     
 })
+
+// on screen controller events
+//-----------
 
 joyContainer.addEventListener("touchstart", (e) => {
     const touch = e.targetTouches[0] 
@@ -335,6 +337,7 @@ class Game {
         this.state = this.states.initializing
         this.state.enter();
         this.activeObjects.push(new CannonWielder(this,{x:0,y:100,z:400}))
+        
         //this.activeObjects.push(new Line(this,{x:100,y:300,z:-300},{x:-1000,y:900,z:3000}))
         //this.activeObjects.push(new CircleTest(this,100,{x:0,y:500,z:1500}))
         
@@ -645,7 +648,6 @@ class Point {
                 arguments[i].parentPoint = this
             }
         }
-        console.log(this.dependentPoints)
     }
     getCoords(){
         return {x:this.x, y:this.y, z:this.z}
@@ -664,6 +666,8 @@ class PhysicsPoint extends Point{
         this.framesActive = 0
     }
     update(){
+        //---------note to self:
+        // onGround variable inconsistent, need to test it 
         const {velocity, borders, force} = this
         const vector = {x:this._x, y:this._y, z:this._z} //block works on a copy of the current coordinates
         const onGround = vector.y >= borders.y[0] && velocity.y === 0
@@ -689,6 +693,7 @@ class PhysicsPoint extends Point{
         super.update()
     }
     collision(vector, axis, borderIndex){
+        this.hasCollided = true; 
         const {velocity, borders, force} = this
         const distanceCovered = Math.abs(velocity[axis])
         const overshootDistance = (Math.abs(vector[axis])-Math.abs(borders[axis][borderIndex]))
@@ -725,7 +730,6 @@ class GameImage {
             this.flipHorizontal(ctx,x+width/2,0)
             ctx.globalAlpha = this.alpha
         }
-        if (this.image.currentSrc === "http://192.168.2.39:5501/images/coin_pile/1.png") console.log(this, x,y,width,height)
         if (alpha !== 0 && this.image) ctx.drawImage(this.image, x, y, width, height)
         ctx.restore()
     }
@@ -1274,7 +1278,7 @@ class Circle {
 
 class BowlingBall extends GameObj{
     constructor(game, point = {x:0,y:0,z:0}){
-        super(game, new GameImage(`./images/bowlingball.png`,80,80),point)
+        super(game, new GameImage(`./images/cannonball.png`,80,80),point)
         this.addPhysics()
         this.vector.groundFriction = 0.01
         this.vector.bounceDampening = 0.9
@@ -1282,6 +1286,9 @@ class BowlingBall extends GameObj{
     }
     update(){
         super.update()
+        if (!this.vector.hasCollided){
+            this.game.activeObjects.push(new Smoke(this.game, this.vector))
+        }
     }
     drawShadow(ctx){
         return;
@@ -1469,41 +1476,6 @@ class Projectile extends GameObj{
     }
 }
 
-class Coin extends Projectile{
-    static imageParams = [`./images/coin.png`,55*0.5,42*0.5]
-    static lastSfxValue = 0 
-    constructor(game,startPoint,targetPoint){
-        super(game, new GameImage(...Coin.imageParams), startPoint)
-        this.game = game
-        this.setSfx()
-        this.airFriction = 0;
-        this.rotationSpeed = randomValue(-0.5,0.5)
-        this.start = startPoint 
-        this.target = targetPoint
-        this.unitVector = unitVector(vectorFromPoints(this.start,this.target))
-        for (const axis in this.unitVector){
-            this.velocity[axis] = this.unitVector[axis] * randomValue(-2,2)
-            this.force[axis] = this.unitVector[axis] * randomValue(0.5,0.6)
-        }
-        this.relativeSpeed = -this.game.player.moveSpeed
-        this.borders.z[0] = undefined
-    }
-    update(){
-        super.update();
-        if (this.vector.z < randomValue(-300,-200)) this.image.fadeAlpha(-0.25)
-        if (this.image.alpha <= 0) {
-            this.markedForDel = true;
-            this.sfx.play(); 
-            this.game.stats.coins += 1       
-        }   
-    }
-    setSfx(){
-        let num = Math.floor(randomValue(1,6))
-        while(num === Coin.lastSfxValue) { num = Math.floor(randomValue(1,6)) }
-        Coin.lastSfxValue = num
-        this.sfx = new SoundEffect(`./sounds/coins/${num}.mp3`,0.3)
-    }
-}
 
 class Coin_test extends GameObj {
     static imageParams = [`./images/coin.png`,55*0.5,42*0.5]
@@ -1540,6 +1512,42 @@ class Coin_test extends GameObj {
     }
 }
 
+class Smoke extends GameObj {
+    static sourceFolder = './images/smoke/'
+    static getFrames(){ 
+        const images = []
+        for (let i = 0; i < 6; i++) {
+            const gameImgSource = Smoke.sourceFolder + (i+ 1) + ".png"
+            const frame = new GameImage(gameImgSource, 20*3, 20*3)
+            frame.angle = randomValue(0,3.14)
+            images.push(frame);
+        }
+        return images
+     }
+    constructor(game, startPoint){
+        const images = Smoke.getFrames()
+        super(game, images[5], startPoint)
+        this.frames = images
+        this.currentFrame = 5
+        this.frameDelay = randomInt(4,9)
+        this.riseSpeed = randomValue(2,2.5)
+        this.frameDelayCounter = this.frameDelay
+    }
+    update(){
+        this.vector.y += this.riseSpeed
+        if (this.frameDelayCounter === 0) {
+            this.currentFrame -= 1
+            if (this.currentFrame < 0) {
+                this.markedForDel = true;
+                return
+            }
+            this.swapGameImage(this.frames[this.currentFrame])
+            this.frameDelayCounter = this.frameDelay
+        } else {
+            this.frameDelayCounter -= 1
+        }
+    }
+}
 class FiredArrow extends Projectile {
     static imageSource = './images/fired_arrow_2.png'
     constructor(game, basePoint){
@@ -1685,7 +1693,6 @@ class Enemy extends GameObj{
     }
     spawnCoins(num){
         const startPoint = this.centralVector
-        console.log(this.centralVector)
         startPoint.z -= 150
         startPoint.x *= 0.9
         const playerPoint = {x: 0, y: 500, z: -400}
@@ -1837,7 +1844,8 @@ class CannonWielder extends Enemy {
             this.wheelOne.vector, this.wheelTwo.vector
         );
         
-        this.game.activeObjects.push(...[this.wheelOne,this.wheelTwo,this.cannonBase,this.cannonEnd])
+        this.cannonEnd.draw(ctx)
+        //this.game.activeObjects.push(...[this.wheelOne,this.wheelTwo,this.cannonBase,this.cannonEnd])
     }
     update(input){
         super.update()
@@ -1861,8 +1869,6 @@ class CannonWielder extends Enemy {
         const currentCannonAngle = Math.atan2(
             cannonDirectionVector.z, cannonDirectionVector.x) 
         const angleDifference = (currentCannonAngle - newJoystickAngle)
-        
-        console.log(round(newJoystickAngle,2), round(currentCannonAngle,2))
 
         const newJoystickMagnitude = Math.sqrt(Math.pow(newJoystickVector.x,2) + Math.pow(newJoystickVector.y,2))
         if (newJoystickMagnitude > 0.01){
@@ -1873,22 +1879,22 @@ class CannonWielder extends Enemy {
         
         if (movement.x + movement.z !== 0) this.vector.velocity = movement
 
-        const pieces = [
-            this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo
-        ]
+        
 
         //spin wheels according to forward movement
         const movementMagnitude = vectorMagnitude(this.vector.velocity)
         const rotationDirection = Math.sign(dotProduct(cannonDirectionVector, this.vector.velocity)) * -1
         if (movementMagnitude != 0) {
-            const wheelCircumference =  2 * Math.PI * this.wheelOne.radius 
-            const arr = [this.wheelOne, this.wheelTwo].forEach( wheel => {
+            const wheelCircumference =  2 * Math.PI * this.wheelOne.radius;
+
+            [this.wheelOne, this.wheelTwo].forEach((wheel) => {
                 const rotationAmount = (movementMagnitude / wheelCircumference) * Math.PI * 2
                 wheel.rotate(this.wheelOne.vector, this.wheelOne.normalVector, 
                     rotationAmount * rotationDirection);
             })
         }
-
+        
+        const pieces = [this.cannonBase, this.cannonEnd, this.wheelOne, this.wheelTwo]
         if (yAxisRotation != 0) {pieces.forEach( piece => {
             piece.rotate(this.cannonBase.vector, {x:0,y:1,z:0}, yAxisRotation)
         })}
@@ -1901,8 +1907,17 @@ class CannonWielder extends Enemy {
     }
     draw(ctx){
         super.draw(ctx)
-        if (!this.cannonEnd.polygonPoints) return
-        this.drawCannonBarrel(ctx)
+        //if (!this.cannonEnd.polygonPoints) return
+        const distanceSorted = [this.wheelOne,this.wheelTwo,this.cannonBase,this.cannonEnd]
+            .sort((a,b) => {
+                return vectorMagnitude(b.vector.visionVector) - vectorMagnitude(a.vector.visionVector)
+            })
+        distanceSorted.forEach((part) => {
+            if (part === this.cannonEnd) this.drawCannonBarrel(ctx)
+            part.draw(ctx)
+            
+        })
+
     }
     drawCannonBarrel(ctx){
         //finding point and tangent line between circle to two points on cannon end polygon
@@ -2269,13 +2284,13 @@ class Attacking extends PlayerState {
     }
     checkCollision(){
         if (!this.inActiveFrameRange()) return;
-        const activeObj = this.game.activeObjects
-        for (let i = activeObj.length-1; i >= 0; i--) {
-            if (activeObj[i] instanceof Enemy){
-                let inRange = activeObj[i].vector.z < 400 
-                            && activeObj[i].vector.z > (activeObj[i].lane === "middle" ? -100 : 100)  
-                            && activeObj[i].lane === this.player.lane
-                if (inRange) activeObj[i].receiveAttack();
+        const objects = this.game.activeObjects
+        for (let i = objects.length-1; i >= 0; i--) {
+            if (objects[i] instanceof Enemy){
+                let inRange = objects[i].vector.z < 400 
+                            && objects[i].vector.z > (objects[i].lane === "middle" ? -100 : 100)  
+                            && objects[i].lane === this.player.lane
+                if (inRange) objects[i].receiveAttack();
             } 
         }
     }
